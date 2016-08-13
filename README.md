@@ -24,4 +24,6 @@ For all intents and purposes this is a swath of ADAL.NET functionality reimpleme
     * Retrieves an access token as a an OAuth public client
 * Get-WSTrustUserRealmDetails
     * Retrieves the WSFederation details for a given user prinicpal name
+
+
 ## Read More at [Azure Field Notes Blog][] or follow us on Twitter at [@azurefieldnotes][]
