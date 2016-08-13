@@ -2,7 +2,9 @@
 [@azurefieldnotes]: https://twitter.com/azurefieldnotes
 # Avanade.AzureAD PowerShell Module
 ## A PowerShell Module for obtaining tokens and authorizing applications in Azure Active Directory.
-    For all intents and purposes this is a swath of ADAL.NET functionality reimplemented in PowerShell
+
+For all intents and purposes this is a swath of ADAL.NET functionality reimplemented in PowerShell
+
 ### Exposed Cmdlets
 * Approve-AzureADApplication
     * Approves an Azure AD Application Interactively and returns the Authorization Code
@@ -22,4 +24,4 @@
     * Retrieves an access token as a an OAuth public client
 * Get-WSTrustUserRealmDetails
     * Retrieves the WSFederation details for a given user prinicpal name
-## Read More at [Azure Field Notes Blog][] or follow us on Twiiter at [@azurefieldnotes][]
+## Read More at [Azure Field Notes Blog][] or follow us on Twitter at [@azurefieldnotes][]
