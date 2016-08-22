@@ -4,6 +4,7 @@
     Copyright Chris Speers, Avanade 2016
     No warranty implied or expressed, side effects include insomnia, runny nose, vomiting
 #>
+
 $ErrorActionPreference='Stop'
 
 #Winforms Sync Context
@@ -62,8 +63,15 @@ $Script:WSTrustSoapEnvelopeTemplate=@"
 
 #region Helper methods
 
+<#
+    .SYNOPSIS
+        Removes Base64 Padding from a string
+    .PARAMETER Data
+        The Input String
+#>
 Function RemoveBase64PaddingFromString
 {
+    [OutputType([String])]
     [CmdletBinding()]
     param
     (
@@ -83,7 +91,6 @@ Function RemoveBase64PaddingFromString
 
     return $UnpaddedData
 }
-
 
 <#
     .SYNOPSIS

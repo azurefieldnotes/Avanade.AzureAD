@@ -1,5 +1,6 @@
 [Azure Field Notes Blog]: https://www.azurefieldnotes.com/2016/08/03/azure-azure-active-directory-powershell-hard-way/
 [@azurefieldnotes]: https://twitter.com/azurefieldnotes
+![OAuth Posh AAD](https://azurefieldnotesblog.blob.core.windows.net/wp-content/2016/08/poshoauth-300x196.png)
 # Avanade.AzureAD PowerShell Module
 ## A PowerShell Module for obtaining tokens and authorizing applications in Azure Active Directory.
 
