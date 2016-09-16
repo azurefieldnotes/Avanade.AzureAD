@@ -65,6 +65,25 @@ $Script:WSTrustSoapEnvelopeTemplate=@"
 
 <#
     .SYNOPSIS
+        Converts a Unix Timestamp to DateTime
+    .PARAMETER UnixTime
+        The Unix Timestamp to be converted
+#>
+Function ConvertFromUnixTime
+{
+    [OutputType([System.DateTime])]
+    param
+    (
+        [Parameter(Mandatory=$true)]
+        [double]
+        $UnixTime
+    )
+    $epoch = New-Object System.DateTime(1970, 1, 1, 0, 0, 0, 0)
+    return $epoch.AddSeconds($UnixTime)
+}
+
+<#
+    .SYNOPSIS
         Removes Base64 Padding from a string
     .PARAMETER Data
         The Input String
@@ -1106,6 +1125,56 @@ Function Get-AzureADUserToken
     return $AssertionResult
 }
 
+Function Get-AzureADRefreshToken
+{
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory=$true)]
+        [System.Uri]
+        $Resource,
+        [Parameter(Mandatory=$true)]
+        [string]
+        $RefreshToken,
+        [Parameter(Mandatory=$true)]
+        [string]
+        $ClientId,
+        [Parameter(Mandatory=$false)]
+        [System.String]
+        $TenantId="common",
+        [Parameter(Mandatory=$false)]
+        [System.Uri]
+        $AuthorizationUri=$Script:DefaultAuthUrl,
+        [Parameter(Mandatory=$false)]
+        [System.String]
+        $TokenEndpoint='oauth2/token',
+        [Parameter(Mandatory=$false)]
+        [System.String]
+        $AuthCodeEndpoint='oauth2/authorize',
+        [Parameter(Mandatory=$false)]
+        [System.String]
+        $TokenApiVersion=$Script:DefaultTokenApiVersion  
+    )
+
+    Write-Verbose "[Get-AzureADRefreshToken] Retrieving OAuth Refresh Token for Client:$ClientId"
+
+    $UriBuilder=New-Object System.UriBuilder($AuthorizationUri)
+    $UriBuilder.Path="$TenantId/$TokenEndpoint"
+    $UriBuilder.Query="api-version=$TokenApiVersion"
+    Write-Verbose "[GetAzureADUserToken] Requesting User Token for User $UserName from $($UriBuilder.Uri.AbsoluteUri)"
+    $Request=[ordered]@{
+        'grant_type'='refresh_token';
+        'resource'=$Resource;
+        'client_id'=$ClientId;
+        'refresh_token'=$RefreshToken
+    }
+    Write-Verbose "[Get-AzureADRefreshToken] Acquiring Token From $($UriBuilder.Uri)"
+    $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
+    return $Response
+
+
+}
+
 <#
     .SYNOPSIS
         Approve an Azure Active Directory Application using the OAuth consent framework
@@ -1354,7 +1423,7 @@ Function ConvertFrom-EncodedJWT
     [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
         [String]
         $RawToken,
         [Parameter()]
@@ -1391,4 +1460,24 @@ Function ConvertFrom-EncodedJWT
     {
         return $DecodedJwt
     }
+}
+
+Function Test-JWTHasExpired
+{
+    [CmdletBinding()]
+    param
+    (
+       [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+       [String]
+       $Token
+    )
+
+    $DecodedToken=ConvertFrom-EncodedJWT -RawToken $Token
+    $ExpireTime=ConvertFromUnixTime -UnixTime $DecodedToken.payload.exp
+    Write-Debug "[Confirm-TokenNotExpired] Token Expires: $($ExpireTime)"
+    if([System.DateTime]::UtcNow -gt $ExpireTime)
+    {
+        return $true
+    }
+    return $false
 }

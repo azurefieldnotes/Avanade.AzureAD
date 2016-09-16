@@ -12,7 +12,7 @@
 RootModule = 'Module'
 
 # Version number of this module.
-ModuleVersion = '1.0.0'
+ModuleVersion = '1.0.1'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -72,7 +72,7 @@ RequiredAssemblies = 'System.Drawing', 'System.Windows.Forms'
 FunctionsToExport = 'Get-AzureADUserToken', 'Get-AzureADAccessTokenFromCode', 
             'Get-AzureADImplicitFlowToken',  'Get-AzureADClientToken', 'Get-AzureADOpenIdConfiguration', 
             'Get-WSTrustUserRealmDetails', 'Get-AzureADUserRealm',
-            'ConvertFrom-EncodedJWT', 'Approve-AzureADApplication'
+            'ConvertFrom-EncodedJWT', 'Approve-AzureADApplication', 'Test-JWTHasExpired','Get-AzureADRefreshToken'
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
@@ -96,6 +96,8 @@ AliasesToExport = @()
 PrivateData = @{
 
     PSData = @{
+
+        Title = 'Avanade Azure AD OAuth Helper'
 
         # Tags applied to this module. These help with module discovery in online galleries.
         Tags = 'AzureAD','OAuth2'
