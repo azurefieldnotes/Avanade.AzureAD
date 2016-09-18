@@ -1125,6 +1125,29 @@ Function Get-AzureADUserToken
     return $AssertionResult
 }
 
+<#
+    .SYNOPSIS
+        Retrieves an OAuth2 JWT using the refresh token framework
+    .PARAMETER RefreshToken
+        The JWT refresh token
+    .PARAMETER Resource
+        The Resource Uri to obtain a token for
+    .PARAMETER ClientId
+        The registered Azure Active Directory application id 
+    .PARAMETER Credential
+        The credential to use for authentication
+    .PARAMETER TenantId
+        The Azure Active Directory tenant id or domain name
+    .PARAMETER AuthorizationUri
+        The Azure Active Directory Token AuthorizationEndpoint   
+    .PARAMETER TokenEndpoint
+        The Authorization Token Endpoint
+    .PARAMETER AuthCodeEndpoint
+        The Authorization Code Endpoint
+    .PARAMETER TokenApiVersion
+        The OAuth Token API Version     
+
+#>
 Function Get-AzureADRefreshToken
 {
     [CmdletBinding()]
@@ -1171,8 +1194,6 @@ Function Get-AzureADRefreshToken
     Write-Verbose "[Get-AzureADRefreshToken] Acquiring Token From $($UriBuilder.Uri)"
     $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
     return $Response
-
-
 }
 
 <#
@@ -1462,8 +1483,15 @@ Function ConvertFrom-EncodedJWT
     }
 }
 
+<#
+    .SYNOPSIS
+        Test whether the current JWT is expired
+    .PARAMETER Token
+        The JWT as a string
+#>
 Function Test-JWTHasExpired
 {
+    [OutputType([Boolean])]
     [CmdletBinding()]
     param
     (
@@ -1480,4 +1508,34 @@ Function Test-JWTHasExpired
         return $true
     }
     return $false
+}
+
+<#
+    .SYNOPSIS
+        Return the current JWT expiry as a DateTime
+    .PARAMETER Token
+        The JWT as a string
+    .PARAMETER AsLocal
+        Whether to return the time localized to the current time zone
+#>
+Function Get-JWTExpiry
+{
+    [OutputType([System.DateTime])]
+    [CmdletBinding()]
+    param
+    (
+       [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+       [String]
+       $Token,
+       [Parameter()]
+       [Switch]
+       $AsLocal
+    )
+    $DecodedToken=ConvertFrom-EncodedJWT -RawToken $Token
+    $ExpireTime=ConvertFromUnixTime -UnixTime $DecodedToken.payload.exp 
+    if($AsLocal.IsPresent)
+    {
+        $ExpireTime=$ExpireTime.ToLocalTime()
+    }
+    return $ExpireTime
 }

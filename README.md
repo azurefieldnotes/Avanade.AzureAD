@@ -25,6 +25,11 @@ For all intents and purposes this is a swath of ADAL.NET functionality reimpleme
     * Retrieves an access token as a an OAuth public client
 * Get-WSTrustUserRealmDetails
     * Retrieves the WSFederation details for a given user prinicpal name
-
+* Get-AzureADRefreshToken
+    * Retrieves an OAuth2 JWT using the refresh token framework
+* Test-JWTHasExpired
+    * Test whether the current token has expired
+* Function Get-JWTExpiry
+    * Return the current JWT expiry as a DateTime
 
 ## Read More at [Azure Field Notes Blog][] or follow us on Twitter at [@azurefieldnotes][]
