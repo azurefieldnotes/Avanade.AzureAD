@@ -12,7 +12,7 @@
 RootModule = 'Module'
 
 # Version number of this module.
-ModuleVersion = '1.0.2'
+ModuleVersion = '1.0.3'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -69,10 +69,11 @@ RequiredAssemblies = 'System.Drawing', 'System.Windows.Forms'
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'Get-AzureADUserToken', 'Get-AzureADAccessTokenFromCode', 
+FunctionsToExport = 'Get-AzureADUserToken', 'Get-AzureADAccessTokenFromCode','Get-AzureADRefreshToken', 
             'Get-AzureADImplicitFlowToken',  'Get-AzureADClientToken', 'Get-AzureADOpenIdConfiguration', 
-            'Get-WSTrustUserRealmDetails', 'Get-AzureADUserRealm', 'Get-JWTExpiry',
-            'ConvertFrom-EncodedJWT', 'Approve-AzureADApplication', 'Test-JWTHasExpired','Get-AzureADRefreshToken'
+            'Get-WSTrustUserRealmDetails', 'Get-AzureADUserRealm',
+            'ConvertFrom-EncodedJWT', 'Approve-AzureADApplication', 
+            'Test-JWTHasExpired', 'Get-JWTExpiry'
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()

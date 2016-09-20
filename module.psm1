@@ -385,49 +385,6 @@ Function GetSecurityTokensFromEnvelope
     return $Tokens
 }
 
-<#
-    .SYNOPSIS
-        Issues a SOAP authentication request to the Security Token Service
-    .PARAMETER AuthUri
-        The authorization endpoint
-    .PARAMETER UserName
-        The user to be authenticated
-    .PARAMETER Password
-        The password for authentication
-#>
-Function GetStsResponse
-{
-    [CmdletBinding()]
-    param
-    (
-        [Parameter(Mandatory=$true)]
-        [System.Uri]
-        $AuthUri,
-        [Parameter(Mandatory=$true)]
-        [String]
-        $UserName,
-        [Parameter(Mandatory=$true)]
-        [String]
-        $Password,
-        [Parameter(Mandatory=$false)]
-        [Int32]
-        $LengthInMinutes=10,
-        [Parameter(Mandatory=$true)]
-        [String]
-        $SoapEnvelopeTemplate
-    )
-
-    $UUID=[Guid]::NewGuid()
-    $StartTime=([DateTime]::UtcNow).ToString("yyyy'-'MM'-'ddTHH':'mm':'ss'Z'")
-    $EndTime=([DateTime]::UtcNow).AddMinutes($LengthInMinutes).ToString("yyyy'-'MM'-'ddTHH':'mm':'ss'Z'")
-    $AuthSoapEnvelope=($SoapEnvelopeTemplate -f $UserName,$Password,$UUID,$AuthUri.AbsoluteUri,$StartTime,$EndTime)
-    $Headers=@{
-        SOAPAction=$SoapAction;
-    }
-    $result=Invoke-RestMethod -Uri $AuthUri -Headers $Headers -Body $AuthSoapEnvelope -Method Post -ContentType "application/soap+xml" -ErrorAction Stop
-    return $result
-}
-
 Function GetAzureADUserRealm
 {
     [OutputType([System.Management.Automation.PSCustomObject])]
@@ -562,14 +519,22 @@ Function GetWSTrustResponse
         [String]
         $SoapEnvelopeTemplate=$Script:WSTrustSoapEnvelopeTemplate,
         [Parameter(Mandatory=$false)]
-        [System.String]
-        $SoapAction=$Script:IssueSoapAction
+        [Int32]
+        $LengthInMinutes=10
     )
     
+    $Now=[DateTime]::UtcNow
+    $UUID=[Guid]::NewGuid()
     $UserName=$Credential.UserName
     $Password=$Credential.GetNetworkCredential().Password
     Write-Verbose "[GetWSTrustResponse] Executing SOAP Action against $AuthUri"
-    $result=GetStsResponse -AuthUri $AuthUri -UserName $UserName -Password $Password -SoapEnvelopeTemplate $SoapEnvelopeTemplate
+    $StartTime=$Now.ToString("yyyy'-'MM'-'ddTHH':'mm':'ss'Z'")
+    $EndTime=(($Now.AddMinutes($LengthInMinutes)).ToString("yyyy'-'MM'-'ddTHH':'mm':'ss'Z'"))
+    $AuthSoapEnvelope=($SoapEnvelopeTemplate -f $UserName,$Password,$UUID,$AuthUri.AbsoluteUri,$StartTime,$EndTime)
+    Write-Verbose "[GetWSTrustResponse] Retrieving STS SOAP Response with Validity $StartTime to $EndTime"
+    $Headers=@{SOAPAction=''}
+    $result=Invoke-RestMethod -Uri $AuthUri -Headers $Headers -Body $AuthSoapEnvelope -Method Post -ContentType "application/soap+xml" -ErrorAction Stop
+
     Write-Verbose "[GetWSTrustResponse] Evaluating Response Envelope"
     $StsTokens=GetSecurityTokensFromEnvelope -StsResponse $result
     $WSFedResponse=$StsTokens|Where-Object{$_.TokenType -eq $Script:Saml2AssertionType}
