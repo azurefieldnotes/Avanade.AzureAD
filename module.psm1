@@ -561,14 +561,14 @@ Function GetWSTrustAssertionToken
     (
         [Parameter(Mandatory=$true)]
         [System.Uri]
-        $UsernamePasswordEndpoint,
+        $Endpoint,
         [Parameter(Mandatory=$true)]
         [pscredential]
         $Credential
     )
     #TODO:See if we can do integrated auth....
-    Write-Verbose "[GetWSTrustAssertionToken] Retrieving SAML Token from $UsernamePasswordEndpoint"
-    $WsResult=GetWSTrustResponse -AuthUri $UsernamePasswordEndpoint -Credential $Credential
+    Write-Verbose "[GetWSTrustAssertionToken] Retrieving SAML Token from $Endpoint"
+    $WsResult=GetWSTrustResponse -AuthUri $Endpoint -Credential $Credential
     Write-Verbose "[GetWSTrustAssertionToken] Retrieved SAML Token: $($WsResult.TokenType) Assertion $($WsResult.AssertionType)"
     #Encode the SAML assertion so we can get a token
     $AssertionType=$WsResult.AssertionType
@@ -1085,7 +1085,7 @@ Function Get-AzureADUserToken
     Write-Verbose "[Get-AzureADUserToken] Retrieving WSFed User Assertion Token"
     #Where to we need to authenticate???
     #TODO:See if we can do integrated auth....
-    $AssertionResult=GetWSTrustAssertionToken -UsernamePasswordEndpoint $UserRealm.UsernamePasswordEndpoint -Credential $Credential
+    $AssertionResult=GetWSTrustAssertionToken -Endpoint $UserRealm.UsernamePasswordEndpoint -Credential $Credential
     Write-Verbose "[Get-AzureADUserToken] Successfully received a WSFed User Assertion Token!"
     return $AssertionResult
 }
