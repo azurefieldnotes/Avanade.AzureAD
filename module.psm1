@@ -969,6 +969,8 @@ Function Get-AzureADUserRealm
 <#
     .SYNOPSIS
         Retreives an OAuth 2 JWT from Azure Active Directory as an Application
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties
     .PARAMETER Resource
         The Resource Uri to obtain a token for
     .PARAMETER ClientId
@@ -1065,6 +1067,8 @@ Function Get-AzureADClientToken
 <#
     .SYNOPSIS
         Retreives an OAuth 2 JWT from Azure Active Directory as a User
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties    
     .PARAMETER Resource
         The Resource Uri to obtain a token for
     .PARAMETER ClientId
@@ -1168,6 +1172,8 @@ Function Get-AzureADUserToken
 <#
     .SYNOPSIS
         Retrieves an OAuth2 JWT using the refresh token framework
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties    
     .PARAMETER RefreshToken
         The JWT refresh token
     .PARAMETER Resource
@@ -1267,6 +1273,8 @@ Function Get-AzureADRefreshToken
 <#
     .SYNOPSIS
         Approve an Azure Active Directory Application using the OAuth consent framework
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties    
     .PARAMETER ClientId
         The registered Azure Active Directory application id
     .PARAMETER AuthorizationCode
@@ -1302,18 +1310,22 @@ Function Approve-AzureADApplication
         [System.String]
         $TenantId="common",
         [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
         [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
         [System.String]
         $TokenEndpoint='oauth2/token',
         [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
         [System.String]
         $AuthCodeEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false)]
         [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
         $TokenApiVersion=$Script:DefaultTokenApiVersion,
-        [Parameter()]
+        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
         [Switch]
         $AdminConsent   
     )
@@ -1325,10 +1337,7 @@ Function Approve-AzureADApplication
         else {
             $ClientId=$ConnectionDetails.ClientId
         }
-        if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri)){
-            throw "A RedirectUri value was not present"
-        }
-        else {
+        if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri) -eq $false){
             $RedirectUri=$ConnectionDetails.RedirectUri
         }
         if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
@@ -1356,6 +1365,8 @@ Function Approve-AzureADApplication
 <#
     .SYNOPSIS
         Exchanges an Azure Active Directory Authorization Code for a Token
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties     
     .PARAMETER Resource
         The Resource Uri to obtain a token for
     .PARAMETER ClientId
@@ -1376,34 +1387,67 @@ Function Approve-AzureADApplication
 Function Get-AzureADAccessTokenFromCode
 {
     [OutputType([pscustomobject])]
-    [CmdletBinding(ConfirmImpact='None')]
+    [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [System.Object]
+        $ConnectionDetails,        
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Uri]
         $Resource,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.Uri]
         $RedirectUri=$Script:DefaultNativeRedirectUri,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.String]
         $ClientId,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.String]
         $AuthorizationCode,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.String]
         $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.String]
         $TokenApiVersion=$Script:DefaultTokenApiVersion
     )
+
+    if($PSCmdlet.ParameterSetName -eq 'object') {
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId)){
+            throw "A ClientId value was not present"
+        }
+        else {
+            $ClientId=$ConnectionDetails.ClientId
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.AuthorizationCode)){
+            throw "A AuthorizationCode value was not present"
+        }
+        else {
+            $AuthorizationCode=$ConnectionDetails.AuthorizationCode
+        }        
+        if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
+            throw "A Resource value was not present"
+        }
+        else {
+            $Resource=$ConnectionDetails.Resource
+        }        
+        if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri) -eq $false) {
+            $RedirectUri=$ConnectionDetails.RedirectUri
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId) -eq $false) {
+            $TenantId=$ConnectionDetails.TenantId
+        }
+    }
 
     $TokenUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
     $TokenUriBuilder.Path="$TenantId/$TokenEndpoint"
@@ -1451,8 +1495,13 @@ Function Get-AzureADOpenIdConfiguration
         {
             $OpenIdUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
             $OpenIdUriBuilder.Path="$id/.well-known/openid-configuration"
-            $OpenIdConfig=Invoke-RestMethod -Uri $OpenIdUriBuilder.Uri -ContentType "application/json" -ErrorAction Stop
-            Write-Output $OpenIdConfig        
+            try {
+                $OpenIdConfig=Invoke-RestMethod -Uri $OpenIdUriBuilder.Uri -ContentType "application/json" -ErrorAction Stop
+                Write-Output $OpenIdConfig
+            }
+            catch [System.Exception] {
+                Write-Warning "Tenant $id $_"
+            }       
         }
     }
     END
@@ -1464,6 +1513,8 @@ Function Get-AzureADOpenIdConfiguration
 <#
     .SYNOPSIS
         Retrieves an OAuth access token interactively for an application allowing Implicit Flow
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties
     .PARAMETER Resource
         The Resource Uri to obtain a token for
     .PARAMETER ClientId
@@ -1485,37 +1536,67 @@ Function Get-AzureADOpenIdConfiguration
 #>
 Function Get-AzureADImplicitFlowToken
 {
-    [CmdletBinding(ConfirmImpact='None')]
+    [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [System.Object]
+        $ConnectionDetails,        
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Uri]
         $Resource,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.String]
         $ClientId,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Uri]
         $RedirectUri,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $AuthEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TokenApiVersion=$Script:DefaultTokenApiVersion,
-        [Parameter()]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [Switch]
         $Consent,
-        [Parameter()]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [Switch]
         $AdminConsent
     )
+
+    if($PSCmdlet.ParameterSetName -eq 'object') {
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId)){
+            throw "A ClientId value was not present"
+        }
+        else {
+            $ClientId=$ConnectionDetails.ClientId
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri)){
+            throw "A RedirectUri value was not present"
+        }
+        else {
+            $RedirectUri=$ConnectionDetails.RedirectUri
+        }        
+        if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
+            throw "A Resource value was not present"
+        }
+        else {
+            $Resource=$ConnectionDetails.Resource
+        }        
+        if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri) -eq $false) {
+            $RedirectUri=$ConnectionDetails.RedirectUri
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId) -eq $false) {
+            $TenantId=$ConnectionDetails.TenantId
+        }
+    }
 
     $TokenUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
     $TokenUriBuilder.Path="$TenantId/$AuthEndpoint"
