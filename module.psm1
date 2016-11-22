@@ -1202,33 +1202,33 @@ Function Get-AzureADRefreshToken
         [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$true,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Uri]
         $Resource,
-        [Parameter(Mandatory=$true,DefaultParameterSetName='object')]
-        [Parameter(Mandatory=$true,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='object')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [string]
         $RefreshToken,
-        [Parameter(Mandatory=$true,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [string]
         $ClientId,
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.String]
         $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.String]
         $AuthCodeEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.String]
         $TokenApiVersion=$Script:DefaultTokenApiVersion  
     )
@@ -1300,32 +1300,32 @@ Function Approve-AzureADApplication
         [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$true,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [string]
         $ClientId,
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.Uri]
         $RedirectUri=$Script:DefaultNativeRedirectUri,
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.String]
         $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.String]
         $AuthCodeEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         $TokenApiVersion=$Script:DefaultTokenApiVersion,
-        [Parameter(Mandatory=$false,DefaultParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,DefaultParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Switch]
         $AdminConsent   
     )
