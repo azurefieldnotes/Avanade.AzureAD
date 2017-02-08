@@ -20,8 +20,7 @@ $Script:SamlBearer20TokenType = "urn:ietf:params:oauth:grant-type:saml2-bearer";
 #TODO:OAuth OnBehalfOf
 $Script:JwtBearerTokenType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 #endregion
-$Script:DefaultResourceId='https://management.core.windows.net'
-$Script:DefaultNativeClientId="1950a258-227b-4e31-a9cf-717495945fc2"
+
 $Script:DefaultNativeRedirectUri="urn:ietf:wg:oauth:2.0:oob"
 
 #region STS Envelope
@@ -1093,7 +1092,6 @@ Function Get-AzureADUserToken
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true,ParameterSetName='objectWithDefault',ValueFromPipeline=$true)]
         [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
         [System.Object]
         $ConnectionDetails,
@@ -1103,42 +1101,28 @@ Function Get-AzureADUserToken
         [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.String]
         $ClientId,
-        [Parameter(Mandatory=$true,ParameterSetName='explicitWithDefault')]
         [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [pscredential]
         $Credential,
-        [Parameter(Mandatory=$false,ParameterSetName='explicitWithDefault')]        
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='objectWithDefault')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicitWithDefault')]        
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='objectWithDefault')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicitWithDefault')]        
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,ParameterSetName='objectWithDefault')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicitWithDefault')]
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $AuthCodeEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false,ParameterSetName='objectWithDefault')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicitWithDefault')]
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
-        $TokenApiVersion=$Script:DefaultTokenApiVersion,
-        [Parameter(Mandatory=$false,ParameterSetName='objectWithDefault')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicitWithDefault')]
-        [Switch]
-        $UseDefaultAzureManagement
+        $TokenApiVersion=$Script:DefaultTokenApiVersion    
     )
 
     if($PSCmdlet.ParameterSetName -eq 'object') {
@@ -1167,25 +1151,6 @@ Function Get-AzureADUserToken
             $TenantId=$ConnectionDetails.TenantId
         }
     }
-    elseif ($PSCmdlet.ParameterSetName -in 'objectWithDefault','explicitWithDefault') {
-        Write-Verbose "[Get-AzureADUserToken] Using Native Client Id:$Script:DefaultNativeClientId Resource Id:$Script:DefaultResourceId"
-        $ClientId=$Script:DefaultNativeClientId
-        $Resource=$Script:DefaultResourceId
-        if ($PSCmdlet.ParameterSetName -eq 'objectWithDefault') {
-            if($ConnectionDetails.Credential -eq $null){
-                throw "A Credential value was not present"
-            }
-            else {
-                $Credential=$ConnectionDetails.Credential
-            }
-            if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
-                $TenantId='common'
-            }
-            else {
-                $TenantId=$ConnectionDetails.TenantId
-            }
-        }     
-    }
     Write-Verbose "[Get-AzureADUserToken] Retrieving OAuth Token ClientId:$ClientId Resource:$Resource Tenant:$TenantId as $($Credential.UserName)"
     $UserRealm=Get-AzureADUserRealm -UserPrincipalName $Credential.UserName -AuthorizationEndpoint $AuthorizationUri
     Write-Verbose "[Get-AzureADUserToken] Realm $($UserRealm.RealmDetails.DomainName) NamespaceType:$($UserRealm.RealmDetails.NameSpaceType)"
@@ -1193,14 +1158,8 @@ Function Get-AzureADUserToken
     {
         Write-Verbose "[Get-AzureADUserToken] Retrieving OAuth Token for Client:$ClientId as $($Credential.UserName)"
         $UserResult=GetAzureADUserToken -Resource $Resource -ClientId $ClientId -Credential $Credential -TenantId $TenantId
-        if ($UserResult) {
-            Write-Verbose "[Get-AzureADUserToken] Successfully received an OAuth Token!"
-            return $UserResult
-        }
-        else {
-            #Hmm. should be thrown elsewhere..
-            throw "Failed to retrieve an OAuth token"
-        }
+        Write-Verbose "[Get-AzureADUserToken] Successfully received an OAuth Token!"
+        return $UserResult
     }
     Write-Verbose "[Get-AzureADUserToken] Retrieving WSFed User Assertion Token"
     #Where to we need to authenticate???
