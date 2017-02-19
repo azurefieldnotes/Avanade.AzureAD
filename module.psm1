@@ -21,6 +21,9 @@ $Script:SamlBearer20TokenType = "urn:ietf:params:oauth:grant-type:saml2-bearer";
 $Script:JwtBearerTokenType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 #endregion
 
+$Script:DefaultAzureManagementUri='https://management.core.windows.net'
+$Script:DefaultAzureManagementClientId='1950a258-227b-4e31-a9cf-717495945fc2'
+
 $Script:DefaultNativeRedirectUri="urn:ietf:wg:oauth:2.0:oob"
 
 #region STS Envelope
@@ -1095,12 +1098,12 @@ Function Get-AzureADUserToken
         [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.Uri]
-        $Resource,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        $Resource=$Script:DefaultAzureManagementUri,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
-        $ClientId,
+        $ClientId=$Script:DefaultAzureManagementClientId,
         [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [pscredential]
         $Credential,
@@ -1126,16 +1129,10 @@ Function Get-AzureADUserToken
     )
 
     if($PSCmdlet.ParameterSetName -eq 'object') {
-        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId)){
-            throw "A ClientId value was not present"
-        }
-        else {
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId) -eq $false){
             $ClientId=$ConnectionDetails.ClientId
         }
-        if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
-            throw "A Resource value was not present"
-        }
-        else {
+        if([String]::IsNullOrEmpty($ConnectionDetails.Resource) -eq $false){
             $Resource=$ConnectionDetails.Resource
         }
         if($ConnectionDetails.Credential -eq $null){
