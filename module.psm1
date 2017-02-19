@@ -21,9 +21,10 @@ $Script:SamlBearer20TokenType = "urn:ietf:params:oauth:grant-type:saml2-bearer";
 $Script:JwtBearerTokenType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 #endregion
 
+#Fungible resource id for ASM and ARM
 $Script:DefaultAzureManagementUri='https://management.core.windows.net'
+#Native client id for ASM,ARM,graph
 $Script:DefaultAzureManagementClientId='1950a258-227b-4e31-a9cf-717495945fc2'
-
 $Script:DefaultNativeRedirectUri="urn:ietf:wg:oauth:2.0:oob"
 
 #region STS Envelope
