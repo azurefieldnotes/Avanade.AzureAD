@@ -939,7 +939,7 @@ Function Get-AzureADUserRealm
                 $MexDataUrl=$WsFedRealmDetails.federation_metadata_url
 
                 Write-Verbose "[Get-AzureADUserRealm] Retrieving Federation Metadata from $MexDataUrl"
-                $FedDOc=Invoke-RestMethod -Uri $MexDataUrl -ContentType 'application/soap+xml' -ErrorAction Stop
+                $FedDoc=Invoke-RestMethod -Uri $MexDataUrl -ContentType 'application/soap+xml' -ErrorAction Stop
                 $WsTrustBindings=GetWSFedBindings -MexDocument $FedDoc
                 $IntegratedEndpoint=GetWSFedEndpoint -MexDocument $FedDoc -AuthType IntegratedAuth -ErrorAction SilentlyContinue
                 $UsernameEndpoint=GetWSFedEndpoint -MexDocument $FedDoc -AuthType UsernamePassword -ErrorAction SilentlyContinue
@@ -1156,15 +1156,31 @@ Function Get-AzureADUserToken
     {
         Write-Verbose "[Get-AzureADUserToken] Retrieving OAuth Token for Client:$ClientId as $($Credential.UserName)"
         $UserResult=GetAzureADUserToken -Resource $Resource -ClientId $ClientId -Credential $Credential -TenantId $TenantId
-        Write-Verbose "[Get-AzureADUserToken] Successfully received an OAuth Token!"
-        return $UserResult
+        if ($UserResult -ne $null) {
+            Write-Verbose "[Get-AzureADUserToken] Successfully received an OAuth Token!"
+            Write-Output $UserResult
+        }
+        else {
+            throw "Failed to receive an OAuth Token!"
+        }
     }
     Write-Verbose "[Get-AzureADUserToken] Retrieving WSFed User Assertion Token"
     #Where to we need to authenticate???
     #TODO:See if we can do integrated auth....
-    $AssertionResult=GetWSTrustAssertionToken -Endpoint $UserRealm.UsernamePasswordEndpoint -Credential $Credential
-    Write-Verbose "[Get-AzureADUserToken] Successfully received a WSFed User Assertion Token!"
-    return $AssertionResult
+    if([String]::IsNullOrEmpty($UserRealm.UsernamePasswordEndpoint) -eq $false)
+    {
+        $AssertionResult=GetWSTrustAssertionToken -Endpoint $UserRealm.UsernamePasswordEndpoint -Credential $Credential
+        if ($AssertionResult -ne $null) {
+            Write-Verbose "[Get-AzureADUserToken] Successfully received a WSFed User Assertion Token!"
+            Write-Output $AssertionResult
+        }
+        else {
+            throw "Failed to receive a WSFed User Assertion Token!"
+        }
+    }
+    else {
+        throw "There is no Username/Password endpoint specified in the Federation Document"
+    }
 }
 
 <#
@@ -1348,14 +1364,16 @@ Function Approve-AzureADApplication
 
     $ConsentUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
     $ConsentUriBuilder.Path="$TenantId/$AuthCodeEndpoint"
+    $QueryStr="api-version=$TokenApiVersion"
     $ConsentType="consent"
     if($AdminConsent.IsPresent)
     {
         $ConsentType="admin_consent"
     }
-    $ConsentUriBuilder.Query="api-version=$TokenApiVersion&client_id=$($ClientId)"
-    $ConsentUriBuilder.Query+="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))"
-    $ConsentUriBuilder.Query+="&response_type=code&prompt=$ConsentType"
+    $QueryStr+="&client_id=$($ClientId)"
+    $QueryStr+="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))"
+    $QueryStr+="&response_type=code&prompt=$ConsentType"
+    $ConsentUriBuilder.Query=$QueryStr
     $AuthCode=GetAzureADAuthorizationCode -AuthorizationUri $ConsentUriBuilder.Uri.AbsoluteUri
     return $AuthCode
 }
