@@ -11,6 +11,14 @@ $Script:FormSyncContext=[hashtable]::Synchronized(@{})
 $Script:DefaultAuthUrl='https://login.microsoftonline.com'
 $Script:DefaultTokenApiVersion="2.1"
 $Script:WSFedUserRealmApiVersion="1.0"
+#Fungible resource id for ASM and ARM
+$Script:DefaultAzureManagementUri='https://management.core.windows.net'
+#Native client id for ASM,ARM,graph
+$Script:DefaultAzureManagementClientId='1950a258-227b-4e31-a9cf-717495945fc2'
+#Native client id for Portal
+$Script:DefaultAzurePortalClientId='c44b4083-3bb0-49c1-b47d-974e53cbdf3c'
+#Default Native Client Redirect Uri
+$Script:DefaultNativeRedirectUri="urn:ietf:wg:oauth:2.0:oob"
 
 #region SAML Constants
 $Script:Saml1AssertionType="urn:oasis:names:tc:SAML:1.0:assertion"
@@ -20,12 +28,6 @@ $Script:SamlBearer20TokenType = "urn:ietf:params:oauth:grant-type:saml2-bearer";
 #TODO:OAuth OnBehalfOf
 $Script:JwtBearerTokenType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 #endregion
-
-#Fungible resource id for ASM and ARM
-$Script:DefaultAzureManagementUri='https://management.core.windows.net'
-#Native client id for ASM,ARM,graph
-$Script:DefaultAzureManagementClientId='1950a258-227b-4e31-a9cf-717495945fc2'
-$Script:DefaultNativeRedirectUri="urn:ietf:wg:oauth:2.0:oob"
 
 #region STS Envelope
 $Script:WSTrustSoapEnvelopeTemplate=@"
@@ -694,20 +696,21 @@ Function GetAzureADAuthorizationCode
             $e
         )
         $TheForm=$sender.Parent
-        Write-Verbose "Navigated $($e.Url)"
+        Write-Verbose "[GetAzureADAuthorizationCode] Navigated $($e.Url)"
         $uri=New-Object System.Uri($e.Url)
         $QueryParams=$uri.Query.TrimStart('?').Split('&')
         #Make a hashtable of the query
         $Parameters=@{}
         foreach ($item in $QueryParams)
         {
+            Write-Verbose "[GetAzureADAuthorizationCode] Parameter:$item"
             $pieces=$item.Split('=')
             $Parameters.Add($pieces[0],[System.Uri]::UnescapeDataString($pieces[1]))
         }
         #Look for the Authorization Code
         if($Parameters.ContainsKey('code'))
         {
-            Write-Verbose "Authorization Code Received!"
+            Write-Verbose "[GetAzureADAuthorizationCode] Authorization Code Received!"
             $Script:FormSyncContext.Code=$Parameters['code']
             $TheForm.DialogResult=[System.Windows.Forms.DialogResult]::OK
             $TheForm.Close()
@@ -718,7 +721,7 @@ Function GetAzureADAuthorizationCode
             $TheForm.DialogResult=[System.Windows.Forms.DialogResult]::Abort
             $TheForm.Close()
             $Script:FormSyncContext.Error="$($Parameters['error']):$($Parameters['error_description'].Replace('+'," "))"
-            Write-Verbose "Error Retrieving Access Code:$($Script:FormSyncContext.Error)"
+            Write-Verbose "[GetAzureADAuthorizationCode] Error Retrieving Access Code:$($Script:FormSyncContext.Error)"
         }
     }
     $OnDocumentCompleted={
@@ -728,7 +731,7 @@ Function GetAzureADAuthorizationCode
             [System.Windows.Forms.WebBrowserDocumentCompletedEventArgs]$e
         )
         $TheForm=$sender.Parent
-        Write-Verbose "Document Completed! Size:$($sender.Document.Body.ScrollRectangle.Size)"
+        Write-Verbose "[GetAzureADAuthorizationCode] Document Completed! Size:$($sender.Document.Body.ScrollRectangle.Size)"
         $TheForm.Text= $sender.Document.Title
     }
     $ConsentBrowser.add_DocumentCompleted($OnDocumentCompleted)
@@ -836,6 +839,8 @@ Function GetAzureADAccessToken
 
 #endregion
 
+#region User Realms
+
 <#
     .SYNOPSIS
         Retrieves the WSFederation details for a given user prinicpal name
@@ -862,18 +867,26 @@ Function Get-WSTrustUserRealmDetails
     )
     BEGIN
     {
-
+        $RealmUriBuilder=New-Object System.UriBuilder($AuthorizationEndpoint)
+        $RealmUriBuilder.Query="api-version=$UserRealmApiVersion"
     }
     PROCESS
     {
         foreach ($upn in $UserPrincipalName)
         {
-            $RealmUriBuilder=New-Object System.UriBuilder($AuthorizationEndpoint)
-            $RealmUriBuilder.Path="/common/UserRealm/$upn"
-            $RealmUriBuilder.Query="api-version=$UserRealmApiVersion"
-            Write-Verbose "[Get-WSTrustUserRealmDetails] Retrieving User Realm Detail from $($RealmUriBuilder.Uri.AbsoluteUri) for $UserPrincipalName"
-            $RealmDetails=Invoke-RestMethod -Uri $RealmUriBuilder.Uri -ContentType "application/json" -ErrorAction Stop
-            Write-Output $RealmDetails
+            try
+            {
+                $RealmUriBuilder.Path="/common/UserRealm/$upn"
+                Write-Verbose "[Get-WSTrustUserRealmDetails] Retrieving User Realm Detail from $($RealmUriBuilder.Uri.AbsoluteUri) for $upn"
+                $RealmDetails=Invoke-RestMethod -Uri $RealmUriBuilder.Uri -ContentType "application/json" -ErrorAction Stop
+                if($RealmDetails) {
+                    Write-Output $RealmDetails
+                }
+            }
+            catch
+            {
+                Write-Warning "[Get-WSTrustUserRealmDetails] $upn version:$UserRealmApiVersion  $_"
+            }
         }
     }
     END
@@ -972,34 +985,242 @@ Function Get-AzureADUserRealm
 
 <#
     .SYNOPSIS
-        Retreives an OAuth 2 JWT from Azure Active Directory as an Application
+        Retreives the Well known OpenId Connect conifguration for the tenant
+    .PARAMETER TenantId
+        The tenant to retrieve the details for
+    .PARAMETER AuthorizationUri
+        The target endpoint
+#>
+Function Get-AzureADOpenIdConfiguration
+{
+    [CmdletBinding(ConfirmImpact='None')]
+    param
+    (
+        [Parameter(Mandatory=$false,ValueFromPipeline=$true)]
+        [String[]]
+        $TenantId='common',
+        [Parameter(Mandatory=$false)]
+        [System.Uri]
+        $AuthorizationUri=$Script:DefaultAuthUrl 
+    )
+
+    BEGIN
+    {
+
+    }
+    PROCESS
+    {
+        foreach ($id in $TenantId)
+        {
+            $OpenIdUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
+            $OpenIdUriBuilder.Path="$id/.well-known/openid-configuration"
+            try {
+                $OpenIdConfig=Invoke-RestMethod -Uri $OpenIdUriBuilder.Uri -ContentType "application/json" -ErrorAction Stop
+                Write-Output $OpenIdConfig
+            }
+            catch [System.Exception] {
+                Write-Warning "[Get-AzureADOpenIdConfiguration] Tenant $id $_"
+            }       
+        }
+    }
+    END
+    {
+
+    }
+}
+
+#endregion
+
+#region JWT Helpers
+
+<#
+    .SYNOPSIS
+        Converts an encoded JSON Web Token to an object representation
+    .PARAMETER RawToken
+        The encoded JWT string
+    .PARAMETER AsString
+        Returns the decoded JWT as a string delimiting sections with a period 
+#>
+Function ConvertFrom-EncodedJWT
+{
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [String[]]
+        $RawToken,
+        [Parameter()]
+        [Switch]
+        $AsString
+    )
+    BEGIN
+    {
+        
+    }
+    PROCESS
+    {
+        foreach ($JwtString in $RawToken)
+        {
+            Write-Debug "[ConvertFrom-EncodedJWT] Raw Token $JwtString"
+            $TokenSections=$JwtString.Split(".");
+
+            $EncodedHeaders=RemoveBase64PaddingFromString -Data $TokenSections[0]
+            $EncodedHeaderBytes=[System.Convert]::FromBase64String($EncodedHeaders)
+            $DecodedHeaders=[System.Text.Encoding]::UTF8.GetString($EncodedHeaderBytes)
+    
+            $EncodedPayload=RemoveBase64PaddingFromString -Data $TokenSections[1]
+            $EncodedPayloadBytes=[System.Convert]::FromBase64String($EncodedPayload)
+            $DecodedPayload=[System.Text.Encoding]::UTF8.GetString($EncodedPayloadBytes)
+    
+            $EncodedSignature=RemoveBase64PaddingFromString -Data $TokenSections[1]
+            $EncodedSignatureBytes=[System.Convert]::FromBase64String($EncodedSignature)
+            $DecodedSignature=[System.Text.Encoding]::UTF8.GetString($EncodedSignatureBytes)
+    
+            $JwtProperties=@{
+                'headers'   = ($DecodedHeaders|ConvertFrom-Json);
+                'payload'    = ($DecodedPayload|ConvertFrom-Json);
+                'signature' = ($DecodedSignature|ConvertFrom-Json);
+            }
+            $DecodedJwt=New-Object PSObject -Property $JwtProperties
+            if($AsString.IsPresent)
+            {
+                $OutputJwt="$DecodedHeaders`n.$DecodedPayload`n.$DecodedSignature"
+                Write-Output $OutputJwt
+            }
+            else
+            {
+                Write-Output $DecodedJwt
+            }            
+        }
+    }
+    END
+    {
+
+    }
+
+}
+
+<#
+    .SYNOPSIS
+        Test whether the current JWT is expired
+    .PARAMETER Token
+        The JWT as a string
+#>
+Function Test-JWTHasExpired
+{
+    [CmdletBinding()]
+    param
+    (
+       [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+       [String[]]
+       $Token
+    )
+    BEGIN
+    {
+
+    }
+    PROCESS
+    {
+        foreach ($item in $Token)
+        {
+            $DecodedToken=ConvertFrom-EncodedJWT -RawToken $item
+            $ExpireTime=ConvertFromUnixTime -UnixTime $DecodedToken.payload.exp
+            Write-Debug "[Test-JWTHasExpired] Token Expires: $($ExpireTime)"
+            if([System.DateTime]::UtcNow -gt $ExpireTime)
+            {
+                Write-Output $true
+            }
+            Write-Output $false            
+        }
+    }
+    END
+    {
+
+    }
+}
+
+<#
+    .SYNOPSIS
+        Return the current JWT expiry as a DateTime
+    .PARAMETER Token
+        The JWT as a string
+    .PARAMETER AsLocal
+        Whether to return the time localized to the current time zone
+#>
+Function Get-JWTExpiry
+{
+    [CmdletBinding()]
+    param
+    (
+       [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+       [String[]]
+       $Token,
+       [Parameter()]
+       [Switch]
+       $AsLocal
+    )
+
+    BEGIN
+    {
+
+    }
+    PROCESS
+    {
+        foreach ($item in $Token)
+        {
+            $DecodedToken=ConvertFrom-EncodedJWT -RawToken $item
+            $ExpireTime=ConvertFromUnixTime -UnixTime $DecodedToken.payload.exp 
+            if($AsLocal.IsPresent)
+            {
+                $ExpireTime=$ExpireTime.ToLocalTime()
+            }
+            Write-Output $ExpireTime
+        }
+    }
+    END
+    {
+
+    }
+}
+
+#endregion
+
+#region Token/Code Request
+
+<#
+    .SYNOPSIS
+        Request an Azure AD OAuth2 authorization code interactively
     .PARAMETER ConnectionDetails
         An object containing all the AAD connection properties
     .PARAMETER Resource
         The Resource Uri to obtain a token for
     .PARAMETER ClientId
-        The registered Azure Active Directory application id 
-    .PARAMETER ClientSecret
-        The client secret to use for authentication
-    .PARAMETER TenantId
-        The Azure Active Directory tenant id or domain name
+        The registered Azure Active Directory application id
     .PARAMETER AuthorizationUri
         The Azure Active Directory Token AuthorizationEndpoint
-    .PARAMETER TokenEndpoint
-        The Authorization Token Endpoint
-    .PARAMETER AuthCodeEndpoint
-        The Authorization Code Endpoint
+    .PARAMETER TenantId
+        The Azure Active Directory tenant id or domain name
+    .PARAMETER RedirectUri
+        The approved Redirect URI request for the application
+    .PARAMETER AuthEndpoint
+        The OAuth2 authorization endpoint
     .PARAMETER TokenApiVersion
         The OAuth Token API Version
+    .PARAMETER Consent
+        Whether to grant consent during the request
+    .PARAMETER AdminConsent
+        Whether to grant admin consent during the request
+    .PARAMETER Scope
+        The oauth scopes to apply to the authorization request
 #>
-Function Get-AzureADClientToken
+Function Get-AzureADAuthorizationCode
 {
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
         [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
         [System.Object]
-        $ConnectionDetails,
+        $ConnectionDetails,        
         [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Uri]
         $Resource,
@@ -1007,8 +1228,8 @@ Function Get-AzureADClientToken
         [System.String]
         $ClientId,
         [Parameter(Mandatory=$true,ParameterSetName='explicit')]
-        [System.String]
-        $ClientSecret,
+        [System.Uri]
+        $RedirectUri,
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TenantId="common",
@@ -1016,14 +1237,26 @@ Function Get-AzureADClientToken
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [System.String]
-        $TokenEndpoint='oauth2/token',
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
-        $TokenApiVersion=$Script:DefaultTokenApiVersion
+        $AuthEndpoint='oauth2/authorize',
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $TokenApiVersion=$Script:DefaultTokenApiVersion,
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Switch]
+        $Consent,
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Switch]
+        $AdminConsent,
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [String[]]
+        $Scope=@('user_impersonation','openid')
     )
 
     if($PSCmdlet.ParameterSetName -eq 'object') {
@@ -1033,255 +1266,51 @@ Function Get-AzureADClientToken
         else {
             $ClientId=$ConnectionDetails.ClientId
         }
-        if([String]::IsNullOrEmpty($ConnectionDetails.ClientSecret)){
-            throw "A ClientSecret value was not present"
+        if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri)){
+            throw "A RedirectUri value was not present"
         }
         else {
-            $ClientSecret=$ConnectionDetails.ClientSecret
-        }
+            $RedirectUri=$ConnectionDetails.RedirectUri
+        }        
         if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
             throw "A Resource value was not present"
         }
         else {
             $Resource=$ConnectionDetails.Resource
+        }        
+        if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri) -eq $false) {
+            $RedirectUri=$ConnectionDetails.RedirectUri
         }
-        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
-            $TenantId='common'
-        }
-        else {
+        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId) -eq $false) {
             $TenantId=$ConnectionDetails.TenantId
         }
     }
 
-    $UriBuilder=New-Object System.UriBuilder($AuthorizationUri)
-    $UriBuilder.Path="$TenantId/$TokenEndpoint"
-    $UriBuilder.Query="api-version=$TokenApiVersion"
-    Write-Verbose "[Get-AzureADClientToken] Retrieving token for Client:$ClientId Tenant:$TenantId with Client Secret:[REDACTED] at $($UriBuilder.Uri.AbsolutePath)"
-    $Request=[ordered]@{
-        'grant_type'='client_credentials';
-        'client_id'=$ClientId;
-        'client_secret'=$ClientSecret;
-        'resource'=$Resource
-    }
-    $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
-    Write-Verbose "[Get-AzureADClientToken] Success!"
-    return $Response
-}
-
-<#
-    .SYNOPSIS
-        Retreives an OAuth 2 JWT from Azure Active Directory as a User
-    .PARAMETER ConnectionDetails
-        An object containing all the AAD connection properties    
-    .PARAMETER Resource
-        The Resource Uri to obtain a token for
-    .PARAMETER ClientId
-        The registered Azure Active Directory application id 
-    .PARAMETER Credential
-        The credential to use for authentication
-    .PARAMETER TenantId
-        The Azure Active Directory tenant id or domain name
-    .PARAMETER AuthorizationUri
-        The Azure Active Directory Token AuthorizationEndpoint   
-    .PARAMETER TokenEndpoint
-        The Authorization Token Endpoint
-    .PARAMETER AuthCodeEndpoint
-        The Authorization Code Endpoint
-    .PARAMETER TokenApiVersion
-        The OAuth Token API Version
-#>
-Function Get-AzureADUserToken
-{
-    [OutputType([psobject])]
-    [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
-    param
-    (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
-        [System.Object]
-        $ConnectionDetails,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.Uri]
-        $Resource=$Script:DefaultAzureManagementUri,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.String]
-        $ClientId=$Script:DefaultAzureManagementClientId,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
-        [pscredential]
-        $Credential,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.String]
-        $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.Uri]
-        $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.String]
-        $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.String]
-        $AuthCodeEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.String]
-        $TokenApiVersion=$Script:DefaultTokenApiVersion    
-    )
-
-    if($PSCmdlet.ParameterSetName -eq 'object') {
-        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId) -eq $false){
-            $ClientId=$ConnectionDetails.ClientId
-        }
-        if([String]::IsNullOrEmpty($ConnectionDetails.Resource) -eq $false){
-            $Resource=$ConnectionDetails.Resource
-        }
-        if($ConnectionDetails.Credential -eq $null){
-            throw "A Credential value was not present"
-        }
-        else {
-            $Credential=$ConnectionDetails.Credential
-        }
-        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
-            $TenantId='common'
-        }
-        else {
-            $TenantId=$ConnectionDetails.TenantId
-        }
-    }
-    Write-Verbose "[Get-AzureADUserToken] Retrieving OAuth Token ClientId:$ClientId Resource:$Resource Tenant:$TenantId as $($Credential.UserName)"
-    $UserRealm=Get-AzureADUserRealm -UserPrincipalName $Credential.UserName -AuthorizationEndpoint $AuthorizationUri
-    Write-Verbose "[Get-AzureADUserToken] Realm $($UserRealm.RealmDetails.DomainName) NamespaceType:$($UserRealm.RealmDetails.NameSpaceType)"
-    if($UserRealm.FederationDoc -eq $null)
+    $TokenUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
+    $TokenUriBuilder.Path="$TenantId/$AuthEndpoint"
+    $TokenQuery="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))&resource=$([Uri]::EscapeDataString($Resource.AbsoluteUri))"
+    $TokenQuery+="&api-version=$TokenApiVersion&client_id=$($ClientId)&response_type=code"
+    if($Consent.IsPresent)
     {
-        Write-Verbose "[Get-AzureADUserToken] Retrieving OAuth Token for Client:$ClientId as $($Credential.UserName)"
-        $UserResult=GetAzureADUserToken -Resource $Resource -ClientId $ClientId -Credential $Credential -TenantId $TenantId
-        if ($UserResult -ne $null) {
-            Write-Verbose "[Get-AzureADUserToken] Successfully received an OAuth Token!"
-            Write-Output $UserResult
-        }
-        else {
-            throw "Failed to receive an OAuth Token!"
-        }
+        $TokenQuery+="&prompt=consent"
     }
-    Write-Verbose "[Get-AzureADUserToken] Retrieving WSFed User Assertion Token"
-    #Where to we need to authenticate???
-    #TODO:See if we can do integrated auth....
-    if([String]::IsNullOrEmpty($UserRealm.UsernamePasswordEndpoint) -eq $false)
+    elseif($AdminConsent.IsPresent)
     {
-        $AssertionResult=GetWSTrustAssertionToken -Endpoint $UserRealm.UsernamePasswordEndpoint -Credential $Credential
-        if ($AssertionResult -ne $null) {
-            Write-Verbose "[Get-AzureADUserToken] Successfully received a WSFed User Assertion Token!"
-            Write-Output $AssertionResult
-        }
-        else {
-            throw "Failed to receive a WSFed User Assertion Token!"
-        }
+        $TokenQuery+="&prompt=admin_consent"
     }
-    else {
-        throw "There is no Username/Password endpoint specified in the Federation Document"
+    else
+    {
+        $TokenQuery+="&prompt=login"
     }
-}
-
-<#
-    .SYNOPSIS
-        Retrieves an OAuth2 JWT using the refresh token framework
-    .PARAMETER ConnectionDetails
-        An object containing all the AAD connection properties    
-    .PARAMETER RefreshToken
-        The JWT refresh token
-    .PARAMETER Resource
-        The Resource Uri to obtain a token for
-    .PARAMETER ClientId
-        The registered Azure Active Directory application id 
-    .PARAMETER Credential
-        The credential to use for authentication
-    .PARAMETER TenantId
-        The Azure Active Directory tenant id or domain name
-    .PARAMETER AuthorizationUri
-        The Azure Active Directory Token AuthorizationEndpoint   
-    .PARAMETER TokenEndpoint
-        The Authorization Token Endpoint
-    .PARAMETER AuthCodeEndpoint
-        The Authorization Code Endpoint
-    .PARAMETER TokenApiVersion
-        The OAuth Token API Version     
-
-#>
-Function Get-AzureADRefreshToken
-{
-    [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
-    param
-    (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
-        [System.Object]
-        $ConnectionDetails,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
-        [System.Uri]
-        $Resource,
-        [Parameter(Mandatory=$true,ParameterSetName='object')]
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
-        [string]
-        $RefreshToken,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
-        [string]
-        $ClientId,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.String]
-        $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [System.Uri]
-        $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [System.String]
-        $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [System.String]
-        $AuthCodeEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [System.String]
-        $TokenApiVersion=$Script:DefaultTokenApiVersion  
-    )
-
-    if($PSCmdlet.ParameterSetName -eq 'object') {
-        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId)){
-            throw "A ClientId value was not present"
-        }
-        else {
-            $ClientId=$ConnectionDetails.ClientId
-        }
-        if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
-            throw "A Resource value was not present"
-        }
-        else {
-            $Resource=$ConnectionDetails.Resource
-        }
-        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
-            $TenantId='common'
-        }
-        else {
-            $TenantId=$ConnectionDetails.TenantId
-        }
+    if($Scope -ne $null)
+    {
+        $TokenQuery+="&scope=$([String]::Join('+',$Scope))"
     }
-    Write-Verbose "[Get-AzureADRefreshToken] Retrieving OAuth Refresh Token for ClientId:$ClientId Resource:$Resource Tenant:$TenantId"
-
-    $UriBuilder=New-Object System.UriBuilder($AuthorizationUri)
-    $UriBuilder.Path="$TenantId/$TokenEndpoint"
-    $UriBuilder.Query="api-version=$TokenApiVersion"
-    Write-Verbose "[GetAzureADUserToken] Requesting User Token for User $UserName from $($UriBuilder.Uri.AbsoluteUri)"
-    $Request=[ordered]@{
-        'grant_type'='refresh_token';
-        'resource'=$Resource;
-        'client_id'=$ClientId;
-        'refresh_token'=$RefreshToken
+    $TokenUriBuilder.Query=$TokenQuery
+    $AuthResult=GetAzureADAuthorizationCode -AuthorizationUri $TokenUriBuilder.Uri
+    if ($AuthResult) {
+        Write-Output $AuthResult
     }
-    Write-Verbose "[Get-AzureADRefreshToken] Acquiring Token From $($UriBuilder.Uri)"
-    $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
-    return $Response
 }
 
 <#
@@ -1482,48 +1511,340 @@ Function Get-AzureADAccessTokenFromCode
 
 <#
     .SYNOPSIS
-        Retreives the Well known OpenId Connect conifguration for the tenant
+        Retreives an OAuth 2 JWT from Azure Active Directory as an Application
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties
+    .PARAMETER Resource
+        The Resource Uri to obtain a token for
+    .PARAMETER ClientId
+        The registered Azure Active Directory application id 
+    .PARAMETER ClientSecret
+        The client secret to use for authentication
     .PARAMETER TenantId
-        The tenant to retrieve the details for
+        The Azure Active Directory tenant id or domain name
     .PARAMETER AuthorizationUri
-        The target endpoint
+        The Azure Active Directory Token AuthorizationEndpoint
+    .PARAMETER TokenEndpoint
+        The Authorization Token Endpoint
+    .PARAMETER AuthCodeEndpoint
+        The Authorization Code Endpoint
+    .PARAMETER TokenApiVersion
+        The OAuth Token API Version
 #>
-Function Get-AzureADOpenIdConfiguration
+Function Get-AzureADClientToken
 {
-    [CmdletBinding(ConfirmImpact='None')]
+    [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$false,ValueFromPipeline=$true)]
-        [String[]]
-        $TenantId='common',
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [System.Object]
+        $ConnectionDetails,
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Uri]
-        $AuthorizationUri=$Script:DefaultAuthUrl 
+        $Resource,
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [System.String]
+        $ClientId,
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [System.String]
+        $ClientSecret,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $TenantId="common",
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.Uri]
+        $AuthorizationUri=$Script:DefaultAuthUrl,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [System.String]
+        $TokenEndpoint='oauth2/token',
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $TokenApiVersion=$Script:DefaultTokenApiVersion
     )
 
-    BEGIN
-    {
-
-    }
-    PROCESS
-    {
-        foreach ($id in $TenantId)
-        {
-            $OpenIdUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
-            $OpenIdUriBuilder.Path="$id/.well-known/openid-configuration"
-            try {
-                $OpenIdConfig=Invoke-RestMethod -Uri $OpenIdUriBuilder.Uri -ContentType "application/json" -ErrorAction Stop
-                Write-Output $OpenIdConfig
-            }
-            catch [System.Exception] {
-                Write-Warning "Tenant $id $_"
-            }       
+    if($PSCmdlet.ParameterSetName -eq 'object') {
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId)){
+            throw "A ClientId value was not present"
+        }
+        else {
+            $ClientId=$ConnectionDetails.ClientId
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientSecret)){
+            throw "A ClientSecret value was not present"
+        }
+        else {
+            $ClientSecret=$ConnectionDetails.ClientSecret
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
+            throw "A Resource value was not present"
+        }
+        else {
+            $Resource=$ConnectionDetails.Resource
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
+            $TenantId='common'
+        }
+        else {
+            $TenantId=$ConnectionDetails.TenantId
         }
     }
-    END
-    {
 
+    $UriBuilder=New-Object System.UriBuilder($AuthorizationUri)
+    $UriBuilder.Path="$TenantId/$TokenEndpoint"
+    $UriBuilder.Query="api-version=$TokenApiVersion"
+    Write-Verbose "[Get-AzureADClientToken] Retrieving token for Client:$ClientId Tenant:$TenantId with Client Secret:[REDACTED] at $($UriBuilder.Uri.AbsolutePath)"
+    $Request=[ordered]@{
+        'grant_type'='client_credentials';
+        'client_id'=$ClientId;
+        'client_secret'=$ClientSecret;
+        'resource'=$Resource
     }
+    $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
+    Write-Verbose "[Get-AzureADClientToken] Success!"
+    return $Response
+}
+
+<#
+    .SYNOPSIS
+        Retreives an OAuth 2 JWT from Azure Active Directory as a User
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties    
+    .PARAMETER Resource
+        The Resource Uri to obtain a token for
+    .PARAMETER ClientId
+        The registered Azure Active Directory application id 
+    .PARAMETER Credential
+        The credential to use for authentication
+    .PARAMETER TenantId
+        The Azure Active Directory tenant id or domain name
+    .PARAMETER AuthorizationUri
+        The Azure Active Directory Token AuthorizationEndpoint   
+    .PARAMETER TokenEndpoint
+        The Authorization Token Endpoint
+    .PARAMETER AuthCodeEndpoint
+        The Authorization Code Endpoint
+    .PARAMETER TokenApiVersion
+        The OAuth Token API Version
+    .PARAMETER UseMicrosoftAccount
+        Use a microsoft account interactively
+#>
+Function Get-AzureADUserToken
+{
+    [OutputType([psobject])]
+    [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
+    param
+    (
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [System.Object]
+        $ConnectionDetails,
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.Uri]
+        $Resource=$Script:DefaultAzureManagementUri,
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $ClientId=$Script:DefaultAzureManagementClientId,
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [pscredential]
+        $Credential,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $TenantId="common",
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.Uri]
+        $AuthorizationUri=$Script:DefaultAuthUrl,
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $TokenEndpoint='oauth2/token',
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $AuthCodeEndpoint='oauth2/authorize',
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
+        [System.String]
+        $TokenApiVersion=$Script:DefaultTokenApiVersion,
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
+        [Switch]
+        $UseMicrosoftAccount
+    )
+
+    if($PSCmdlet.ParameterSetName -eq 'object') {
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId) -eq $false){
+            $ClientId=$ConnectionDetails.ClientId
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.Resource) -eq $false){
+            $Resource=$ConnectionDetails.Resource
+        }
+        if($ConnectionDetails.Credential -eq $null){
+            throw "A Credential value was not present"
+        }
+        else {
+            $Credential=$ConnectionDetails.Credential
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
+            $TenantId='common'
+        }
+        else {
+            $TenantId=$ConnectionDetails.TenantId
+        }
+    }
+    Write-Verbose "[Get-AzureADUserToken] Retrieving OAuth Token ClientId:$ClientId Resource:$Resource Tenant:$TenantId as $($Credential.UserName)"
+    if($PSCmdlet.ParameterSetName -eq 'usemsa')
+    {
+        $AuthCode=Get-AzureADAuthorizationCode -Resource $Resource -ClientId $ClientId `
+            -RedirectUri $Script:DefaultNativeRedirectUri -TenantId $TenantId -AuthorizationUri $AuthorizationUri `
+            -AuthEndpoint $AuthCodeEndpoint -TokenApiVersion $TokenApiVersion
+        $AuthToken=Get-AzureADAccessTokenFromCode -Resource $Resource -ClientId $ClientId -RedirectUri $Script:DefaultNativeRedirectUri `
+            -AuthorizationCode $AuthCode -TenantId $TenantId -AuthorizationUri $AuthorizationUri `
+            -TokenEndpoint $TokenEndpoint -TokenApiVersion $TokenApiVersion
+        Write-Output $AuthToken
+    }
+    else
+    {
+        $UserRealm=Get-AzureADUserRealm -UserPrincipalName $Credential.UserName -AuthorizationEndpoint $AuthorizationUri
+        Write-Verbose "[Get-AzureADUserToken] Realm $($UserRealm.RealmDetails.DomainName) NamespaceType:$($UserRealm.RealmDetails.NameSpaceType)"
+        if($UserRealm.FederationDoc -eq $null)
+        {
+            Write-Verbose "[Get-AzureADUserToken] Retrieving OAuth Token for Client:$ClientId as $($Credential.UserName)"
+            $UserResult=GetAzureADUserToken -Resource $Resource -ClientId $ClientId -Credential $Credential -TenantId $TenantId
+            if ($UserResult -ne $null) {
+                Write-Verbose "[Get-AzureADUserToken] Successfully received an OAuth Token!"
+                Write-Output $UserResult
+            }
+            else {
+                throw "Failed to receive an OAuth Token!"
+            }
+        }
+        Write-Verbose "[Get-AzureADUserToken] Retrieving WSFed User Assertion Token"
+        #Where to we need to authenticate???
+        #TODO:See if we can do integrated auth....
+        if([String]::IsNullOrEmpty($UserRealm.UsernamePasswordEndpoint) -eq $false)
+        {
+            $AssertionResult=GetWSTrustAssertionToken -Endpoint $UserRealm.UsernamePasswordEndpoint -Credential $Credential
+            if ($AssertionResult -ne $null) {
+                Write-Verbose "[Get-AzureADUserToken] Successfully received a WSFed User Assertion Token!"
+                Write-Output $AssertionResult
+            }
+            else {
+                throw "Failed to receive a WSFed User Assertion Token!"
+            }
+        }
+        else {
+            throw "There is no Username/Password endpoint specified in the Federation Document"
+        }
+    }
+}
+
+<#
+    .SYNOPSIS
+        Retrieves an OAuth2 JWT using the refresh token framework
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties    
+    .PARAMETER RefreshToken
+        The JWT refresh token
+    .PARAMETER Resource
+        The Resource Uri to obtain a token for
+    .PARAMETER ClientId
+        The registered Azure Active Directory application id 
+    .PARAMETER Credential
+        The credential to use for authentication
+    .PARAMETER TenantId
+        The Azure Active Directory tenant id or domain name
+    .PARAMETER AuthorizationUri
+        The Azure Active Directory Token AuthorizationEndpoint   
+    .PARAMETER TokenEndpoint
+        The Authorization Token Endpoint
+    .PARAMETER AuthCodeEndpoint
+        The Authorization Code Endpoint
+    .PARAMETER TokenApiVersion
+        The OAuth Token API Version     
+
+#>
+Function Get-AzureADRefreshToken
+{
+    [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
+    param
+    (
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [System.Object]
+        $ConnectionDetails,
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [System.Uri]
+        $Resource,
+        [Parameter(Mandatory=$true,ParameterSetName='object')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [string]
+        $RefreshToken,
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [string]
+        $ClientId,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $TenantId="common",
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [System.Uri]
+        $AuthorizationUri=$Script:DefaultAuthUrl,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [System.String]
+        $TokenEndpoint='oauth2/token',
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [System.String]
+        $AuthCodeEndpoint='oauth2/authorize',
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [System.String]
+        $TokenApiVersion=$Script:DefaultTokenApiVersion  
+    )
+
+    if($PSCmdlet.ParameterSetName -eq 'object') {
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId)){
+            throw "A ClientId value was not present"
+        }
+        else {
+            $ClientId=$ConnectionDetails.ClientId
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
+            throw "A Resource value was not present"
+        }
+        else {
+            $Resource=$ConnectionDetails.Resource
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
+            $TenantId='common'
+        }
+        else {
+            $TenantId=$ConnectionDetails.TenantId
+        }
+    }
+    Write-Verbose "[Get-AzureADRefreshToken] Retrieving OAuth Refresh Token for ClientId:$ClientId Resource:$Resource Tenant:$TenantId"
+
+    $UriBuilder=New-Object System.UriBuilder($AuthorizationUri)
+    $UriBuilder.Path="$TenantId/$TokenEndpoint"
+    $UriBuilder.Query="api-version=$TokenApiVersion"
+    Write-Verbose "[GetAzureADUserToken] Requesting User Token for User $UserName from $($UriBuilder.Uri.AbsoluteUri)"
+    $Request=[ordered]@{
+        'grant_type'='refresh_token';
+        'resource'=$Resource;
+        'client_id'=$ClientId;
+        'refresh_token'=$RefreshToken
+    }
+    Write-Verbose "[Get-AzureADRefreshToken] Acquiring Token From $($UriBuilder.Uri)"
+    $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
+    return $Response
 }
 
 <#
@@ -1635,152 +1956,4 @@ Function Get-AzureADImplicitFlowToken
     return $AuthResult
 }
 
-<#
-    .SYNOPSIS
-        Converts an encoded JSON Web Token to an object representation
-    .PARAMETER RawToken
-        The encoded JWT string
-    .PARAMETER AsString
-        Returns the decoded JWT as a string delimiting sections with a period 
-#>
-Function ConvertFrom-EncodedJWT
-{
-    [CmdletBinding()]
-    param
-    (
-        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
-        [String[]]
-        $RawToken,
-        [Parameter()]
-        [Switch]
-        $AsString
-    )
-    BEGIN
-    {
-        
-    }
-    PROCESS
-    {
-        foreach ($JwtString in $RawToken)
-        {
-            Write-Debug "[ConvertFrom-EncodedJWT] Raw Token $JwtString"
-            $TokenSections=$JwtString.Split(".");
-
-            $EncodedHeaders=RemoveBase64PaddingFromString -Data $TokenSections[0]
-            $EncodedHeaderBytes=[System.Convert]::FromBase64String($EncodedHeaders)
-            $DecodedHeaders=[System.Text.Encoding]::UTF8.GetString($EncodedHeaderBytes)
-    
-            $EncodedPayload=RemoveBase64PaddingFromString -Data $TokenSections[1]
-            $EncodedPayloadBytes=[System.Convert]::FromBase64String($EncodedPayload)
-            $DecodedPayload=[System.Text.Encoding]::UTF8.GetString($EncodedPayloadBytes)
-    
-            $EncodedSignature=RemoveBase64PaddingFromString -Data $TokenSections[1]
-            $EncodedSignatureBytes=[System.Convert]::FromBase64String($EncodedSignature)
-            $DecodedSignature=[System.Text.Encoding]::UTF8.GetString($EncodedSignatureBytes)
-    
-            $JwtProperties=@{
-                'headers'   = ($DecodedHeaders|ConvertFrom-Json);
-                'payload'    = ($DecodedPayload|ConvertFrom-Json);
-                'signature' = ($DecodedSignature|ConvertFrom-Json);
-            }
-            $DecodedJwt=New-Object PSObject -Property $JwtProperties
-            if($AsString.IsPresent)
-            {
-                $OutputJwt="$DecodedHeaders`n.$DecodedPayload`n.$DecodedSignature"
-                Write-Output $OutputJwt
-            }
-            else
-            {
-                Write-Output $DecodedJwt
-            }            
-        }
-    }
-    END
-    {
-
-    }
-
-}
-
-<#
-    .SYNOPSIS
-        Test whether the current JWT is expired
-    .PARAMETER Token
-        The JWT as a string
-#>
-Function Test-JWTHasExpired
-{
-    [CmdletBinding()]
-    param
-    (
-       [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
-       [String[]]
-       $Token
-    )
-    BEGIN
-    {
-
-    }
-    PROCESS
-    {
-        foreach ($item in $Token)
-        {
-            $DecodedToken=ConvertFrom-EncodedJWT -RawToken $item
-            $ExpireTime=ConvertFromUnixTime -UnixTime $DecodedToken.payload.exp
-            Write-Debug "[Test-JWTHasExpired] Token Expires: $($ExpireTime)"
-            if([System.DateTime]::UtcNow -gt $ExpireTime)
-            {
-                Write-Output $true
-            }
-            Write-Output $false            
-        }
-    }
-    END
-    {
-
-    }
-}
-
-<#
-    .SYNOPSIS
-        Return the current JWT expiry as a DateTime
-    .PARAMETER Token
-        The JWT as a string
-    .PARAMETER AsLocal
-        Whether to return the time localized to the current time zone
-#>
-Function Get-JWTExpiry
-{
-    [CmdletBinding()]
-    param
-    (
-       [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
-       [String[]]
-       $Token,
-       [Parameter()]
-       [Switch]
-       $AsLocal
-    )
-
-    BEGIN
-    {
-
-    }
-    PROCESS
-    {
-        foreach ($item in $Token)
-        {
-            $DecodedToken=ConvertFrom-EncodedJWT -RawToken $item
-            $ExpireTime=ConvertFromUnixTime -UnixTime $DecodedToken.payload.exp 
-            if($AsLocal.IsPresent)
-            {
-                $ExpireTime=$ExpireTime.ToLocalTime()
-            }
-            Write-Output $ExpireTime
-        }
-    }
-    END
-    {
-
-    }
-}
+#endregion
