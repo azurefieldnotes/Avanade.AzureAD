@@ -1913,24 +1913,27 @@ Function Get-AzureADUserToken
                 throw "Failed to receive an OAuth Token!"
             }
         }
-        Write-Verbose "[Get-AzureADUserToken] Retrieving WSFed User Assertion Token"
-        #Where to we need to authenticate???
-        #TODO:See if we can do integrated auth....
-        if([String]::IsNullOrEmpty($UserRealm.UsernamePasswordEndpoint) -eq $false)
+        else
         {
-            $AssertionResult=GetWSTrustAssertionToken -Endpoint $UserRealm.UsernamePasswordEndpoint -Credential $Credential
-            if ($AssertionResult -ne $null)
+            Write-Verbose "[Get-AzureADUserToken] Retrieving WSFed User Assertion Token"
+            #Where to we need to authenticate???
+            #TODO:See if we can do integrated auth....
+            if([String]::IsNullOrEmpty($UserRealm.UsernamePasswordEndpoint) -eq $false)
             {
-                Write-Verbose "[Get-AzureADUserToken] Successfully received a WSFed User Assertion Token!"
+                $AssertionResult=GetWSTrustAssertionToken -Endpoint $UserRealm.UsernamePasswordEndpoint -Credential $Credential
+                if ($AssertionResult -ne $null)
+                {
+                    Write-Verbose "[Get-AzureADUserToken] Successfully received a WSFed User Assertion Token!"
+                }
+                else
+                {
+                    throw "Failed to receive a WSFed User Assertion Token!"
+                }
                 Write-Output $AssertionResult
             }
-            else
-            {
-                throw "Failed to receive a WSFed User Assertion Token!"
+            else {
+                throw "There is no Username/Password endpoint specified in the Federation Document"
             }
-        }
-        else {
-            throw "There is no Username/Password endpoint specified in the Federation Document"
         }
     }
 }
