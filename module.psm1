@@ -1,4 +1,4 @@
-#requires -Modules 'Microsoft.PowerShell.Utility' -Version 3.0
+#requires -Modules 'Microsoft.PowerShell.Utility' -Assembly System.Security -Version 3.0
 <#
     Functions for the Authorization against Azure Active Directory
     Copyright Chris Speers, Avanade 2016
@@ -19,6 +19,7 @@ $Script:DefaultAzureManagementClientId='1950a258-227b-4e31-a9cf-717495945fc2'
 $Script:DefaultAzurePortalClientId='c44b4083-3bb0-49c1-b47d-974e53cbdf3c'
 #Default Native Client Redirect Uri
 $Script:DefaultNativeRedirectUri="urn:ietf:wg:oauth:2.0:oob"
+$Script:OauthClientAssertionType='urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
 
 #region SAML Constants
 $Script:Saml1AssertionType="urn:oasis:names:tc:SAML:1.0:assertion"
@@ -88,31 +89,93 @@ Function ConvertFromUnixTime
 
 <#
     .SYNOPSIS
-        Removes Base64 Padding from a string
-    .PARAMETER Data
-        The Input String
+        Converts a DateTime to a Unix Timestamp
+    .PARAMETER DateTime
+        The DateTime to be converted
 #>
-Function RemoveBase64PaddingFromString
+Function ConvertToUnixTime
 {
-    [OutputType([String])]
-    [CmdletBinding()]
+    [OutputType([System.Double])]
     param
     (
         [Parameter(Mandatory=$true)]
-        [string]
-        $Data
+        [datetime]
+        $DateTime
     )
+    $epoch = New-Object System.DateTime(1970, 1, 1, 0, 0, 0, 0);
+    $delta = $DateTime - $epoch;
+    return [Math]::Floor($delta.TotalSeconds);
+}
 
-    $UnpaddedData=$Data.Replace('-', '+').Replace('_', '/')
-    switch ($Data.Length % 4)
+<#
+    .SYNOPSIS
+        Removes Base64 Url Padding from a string
+    .PARAMETER Data
+        The Input String
+#>
+Function RemoveBase64UrlPaddingFromString
+{
+    param
+    (
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [String[]]$Data
+    )
+    BEGIN
     {
-        0 { break }
-        2 { $UnpaddedData += '==' }
-        3 { $UnpaddedData += '=' }
-        default { throw New-Object ArgumentException('data') }
-    }
 
-    return $UnpaddedData
+    }
+    PROCESS
+    {
+        foreach ($item in $Data)
+        {
+            $UnpaddedData=$item.Replace('-', '+').Replace('_', '/')
+            switch ($item.Length % 4)
+            {
+                0 { break }
+                2 { $UnpaddedData += '==' }
+                3 { $UnpaddedData += '=' }
+                default { throw New-Object ArgumentException('data') }
+            }
+            Write-Output $UnpaddedData
+        }
+    }
+    END
+    {
+
+    }
+}
+
+<#
+    .SYNOPSIS
+        Adds Base64 Url Padding to a string
+    .PARAMETER Data
+        The Input String
+#>
+Function AddBase64UrlPaddingToString
+{
+    param
+    (
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [String[]]$Data
+    )
+    BEGIN
+    {
+
+    }
+    PROCESS
+    {
+        foreach ($item in $Data)
+        {
+            $CleanedInput=$item.Split('=')|Select-Object -First 1
+            #$CleanedInput=$CleanedInput.Replace('-','+').Replace('_','/')
+            $CleanedInput=$CleanedInput.Replace('+','-').Replace('/','_')
+            Write-Output $CleanedInput
+        }
+    }
+    END
+    {
+
+    }
 }
 
 <#
@@ -1064,27 +1127,28 @@ Function ConvertFrom-EncodedJWT
             Write-Debug "[ConvertFrom-EncodedJWT] Raw Token $JwtString"
             $TokenSections=$JwtString.Split(".");
 
-            $EncodedHeaders=RemoveBase64PaddingFromString -Data $TokenSections[0]
+            $EncodedHeaders=RemoveBase64UrlPaddingFromString -Data $TokenSections[0]
             $EncodedHeaderBytes=[System.Convert]::FromBase64String($EncodedHeaders)
             $DecodedHeaders=[System.Text.Encoding]::UTF8.GetString($EncodedHeaderBytes)
     
-            $EncodedPayload=RemoveBase64PaddingFromString -Data $TokenSections[1]
+            $EncodedPayload=RemoveBase64UrlPaddingFromString -Data $TokenSections[1]
             $EncodedPayloadBytes=[System.Convert]::FromBase64String($EncodedPayload)
             $DecodedPayload=[System.Text.Encoding]::UTF8.GetString($EncodedPayloadBytes)
     
-            $EncodedSignature=RemoveBase64PaddingFromString -Data $TokenSections[1]
-            $EncodedSignatureBytes=[System.Convert]::FromBase64String($EncodedSignature)
-            $DecodedSignature=[System.Text.Encoding]::UTF8.GetString($EncodedSignatureBytes)
+            #$EncodedSignature=RemoveBase64PaddingFromString -Data $TokenSections[2]
+            #$EncodedSignatureBytes=[System.Convert]::FromBase64String($EncodedSignature)
+            #$DecodedSignature=[System.Text.Encoding]::UTF8.GetString($EncodedSignatureBytes)
     
             $JwtProperties=@{
                 'headers'   = ($DecodedHeaders|ConvertFrom-Json);
                 'payload'    = ($DecodedPayload|ConvertFrom-Json);
-                'signature' = ($DecodedSignature|ConvertFrom-Json);
+                #'signature' = ($DecodedSignature|ConvertFrom-Json);
             }
             $DecodedJwt=New-Object PSObject -Property $JwtProperties
             if($AsString.IsPresent)
             {
-                $OutputJwt="$DecodedHeaders`n.$DecodedPayload`n.$DecodedSignature"
+                #$OutputJwt="$DecodedHeaders`n.$DecodedPayload`n.$DecodedSignature"
+                $OutputJwt="$DecodedHeaders`n.$DecodedPayload"
                 Write-Output $OutputJwt
             }
             else
@@ -1954,6 +2018,242 @@ Function Get-AzureADImplicitFlowToken
     $TokenUriBuilder.Query=$TokenQuery
     $AuthResult=GetAzureADAccessToken -AuthorizationUri $TokenUriBuilder.Uri
     return $AuthResult
+}
+
+Function Get-AzureADDiscoveryKeys
+{
+    param
+    (
+        [Parameter(Mandatory=$false)]
+        [String]
+        $TenantId="common",
+        [Parameter(Mandatory=$false)]
+        [String]
+        $CertificateHash,        
+        [Parameter(Mandatory=$false)]
+        [System.Uri]
+        $DiscoveryUri="https://login.windows.net",
+        [Parameter(Mandatory=$false)]
+        [String]
+        $KeyPath="discovery/keys"
+    )
+
+    $KeyUriBld=New-Object System.UriBuilder($DiscoveryUri)
+    $KeyUriBld.Path="$TenantId/$($KeyPath.TrimStart('/'))"
+    $KeyResult=Invoke-RestMethod -Uri $KeyUriBld.Uri -Method Get -ContentType 'application/json'
+    if ($KeyResult -ne $null) {
+        $Output=$KeyResult|Select-Object -ExpandProperty 'keys'
+        if([String]::IsNullOrEmpty($CertificateHash) -eq $false)
+        {
+            $Output=$Output|Where-Object 'x5t' -eq $CertificateHash|Select-Object -First 1
+        }
+        if($Output -ne $null)
+        {
+            Write-Output $Output
+        }
+    }
+}
+
+Function Get-AzureADClientAssertionToken
+{
+    [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
+    param
+    (
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [System.Object]
+        $ConnectionDetails,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.Uri]
+        $Resource=$Script:DefaultAzureManagementUri,
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [System.String]
+        $ClientId,
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]
+        $Certificate,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $TenantId="common",
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [DateTime]
+        $NotBefore=([DateTime]::UtcNow),        
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [datetime]
+        $Expires=($NotBefore.AddMinutes(60)),  
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.Uri]
+        $AuthorizationUri=$Script:DefaultAuthUrl,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [System.String]
+        $TokenEndpoint='oauth2/token',
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $TokenApiVersion=$Script:DefaultTokenApiVersion
+    )
+
+    if($PSCmdlet.ParameterSetName -eq 'object') {
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId)){
+            throw "A ClientId value was not present"
+        }
+        else {
+            $ClientId=$ConnectionDetails.ClientId
+        }
+        if($ConnectionDetails.Certificate -eq $null){
+            throw "A Certificate was not present"
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.Resource) -eq $false){
+            $Resource=$ConnectionDetails.Resource
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
+            $TenantId='common'
+        }
+        else {
+            $TenantId=$ConnectionDetails.TenantId
+        }
+    }
+    $TokenUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
+    $TokenUriBuilder.Path="$TenantId/$TokenEndpoint"    
+    $Sha=New-Object System.Security.Cryptography.SHA256Cng
+    $RsaProvider=GetRsaCryptoProvider -RsaProvider $Certificate.PrivateKey
+    try
+    {
+        #Get the client assertion
+        $ClientAssertion=NewClientAssertion -Certificate $MyCert `
+            -ClientId $ClientId -Audience $TokenUriBuilder.Uri `
+            -Expires $Expires -NotBefore $NotBefore
+        #Sign it
+        $AssertionBytes=[System.Text.Encoding]::UTF8.GetBytes($ClientAssertion)
+        $SignedTokenBytes=$RsaProvider.SignData($AssertionBytes,$Sha)
+        $SignedToken=[Convert]::ToBase64String($SignedTokenBytes)|AddBase64UrlPaddingToString
+        $EncodedAssertion="$ClientAssertion.$SignedToken"
+        #Get the token    
+        $RequestBody=[ordered]@{
+            'grant_type'='client_credentials';
+            'client_id'=$ClientId;
+            'resource'=$Resource;
+            'client_assertion'=$EncodedAssertion;
+            'client_assertion_type'='urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+        }
+        $TokenResponse=Invoke-RestMethod -Uri $TokenUriBuilder.Uri -Method Post -Body $RequestBody -ErrorAction Stop
+        Write-Output $TokenResponse
+    }
+    catch {
+        throw "Error Acquiring Client Asesertion Token $_"
+    }
+    finally {
+        $RsaProvider.Dispose()
+        $Sha.Dispose()
+    }
+}
+
+Function GetRsaCryptoProvider
+{
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory=$true)]
+        [System.Security.Cryptography.RSACryptoServiceProvider]
+        $RsaProvider        
+    )
+    
+    if($RsaProvider.CspKeyContainerInfo.ProviderType -in 1,12)
+    {
+        $csp=New-Object System.Security.Cryptography.CspParameters 
+        $csp.KeyNumber=$RsaProvider.CspKeyContainerInfo.KeyNumber
+        $csp.KeyContainerName=$RsaProvider.CspKeyContainerInfo.KeyContainerName
+        if($RsaProvider.CspKeyContainerInfo.MachineKeyStore)
+        {
+            $csp.Flags=[System.Security.Cryptography.CspProviderFlags]::UseMachineKeyStore
+        }
+        $csp.Flags=$csp.Flags -bor [System.Security.Cryptography.CspProviderFlags]::UseExistingKey
+        $csp.ProviderType=24
+        $NewRsaProvider=New-Object System.Security.Cryptography.RSACryptoServiceProvider($csp)
+        Write-Output $NewRsaProvider
+    }
+    else
+    {
+        Write-Output $RsaProvider
+    }
+}
+
+Function GetCertificateHash
+{
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [System.Security.Cryptography.X509Certificates.X509Certificate2[]]
+        $Certificate
+    )
+    BEGIN
+    {
+
+    }
+    PROCESS
+    {
+        foreach ($Cert in $Certificate)
+        {
+            $Signature=[System.Convert]::ToBase64String($Cert.GetCertHash())
+            Write-Output $Signature
+        }
+    }
+    END
+    {
+
+    }
+}
+
+Function NewClientAssertion
+{
+    param
+    (
+        [System.Uri]
+        $Audience,
+        [Parameter(Mandatory=$true)]
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]
+        $Certificate,
+        [Parameter(Mandatory=$true)]
+        [String]
+        $ClientId,
+        [Parameter(Mandatory=$false)]
+        [String]
+        $JwtId=([Guid]::NewGuid().ToString()),
+        [Parameter(Mandatory=$false)]
+        [datetime]
+        $Expires=($NotBefore.AddMinutes(60)),
+        [Parameter(Mandatory=$false)]
+        [DateTime]
+        $NotBefore=([DateTime]::UtcNow)
+    )
+
+    $JwtHeaders=[ordered]@{
+        "alg"="RS256";
+        "x5t"=($Certificate|GetCertificateHash|AddBase64UrlPaddingToString)
+    }
+    $JwtPayload=[ordered]@{
+        "aud"=$Audience.AbsoluteUri;
+        "exp"= ConvertToUnixTime -DateTime $Expires;
+        "iss"=$ClientId;
+        "jti"=$JwtId;
+        "nbf"=ConvertToUnixTime -DateTime $NotBefore;
+        "sub"=$ClientId;
+    }
+
+    $HeaderJson=$JwtHeaders|ConvertTo-Json -Compress
+    $PayloadJson=$JwtPayload|ConvertTo-Json -Compress
+
+    $HeaderBytes=[System.Text.Encoding]::UTF8.GetBytes($HeaderJson)
+    $HeaderString=[Convert]::ToBase64String($HeaderBytes)|AddBase64UrlPaddingToString
+    $PayloadBytes=[System.Text.Encoding]::UTF8.GetBytes($PayloadJson)
+    $PayloadString=[Convert]::ToBase64String($PayloadBytes)|AddBase64UrlPaddingToString
+
+    $EncodedAssertion="$HeaderString.$PayloadString"
+    Write-Output $EncodedAssertion
 }
 
 #endregion

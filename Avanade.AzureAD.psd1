@@ -12,7 +12,7 @@
 RootModule = 'Module'
 
 # Version number of this module.
-ModuleVersion = '1.1.3'
+ModuleVersion = '1.1.4'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -73,7 +73,8 @@ FunctionsToExport = 'Get-AzureADUserToken', 'Get-AzureADAccessTokenFromCode','Ge
             'Get-AzureADImplicitFlowToken',  'Get-AzureADClientToken', 'Get-AzureADOpenIdConfiguration', 
             'Get-WSTrustUserRealmDetails', 'Get-AzureADUserRealm',
             'ConvertFrom-EncodedJWT', 'Approve-AzureADApplication', 
-            'Test-JWTHasExpired', 'Get-JWTExpiry','Get-AzureADAuthorizationCode'
+            'Test-JWTHasExpired', 'Get-JWTExpiry','Get-AzureADAuthorizationCode',
+            'Get-AzureADDiscoveryKeys','Get-AzureADClientAssertionToken'
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
