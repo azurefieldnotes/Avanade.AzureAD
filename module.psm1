@@ -32,8 +32,8 @@ $Script:JwtBearerTokenType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
 #region STS Envelope
 $Script:WSTrustSoapEnvelopeTemplate=@"
-    <s:Envelope xmlns:s='http://www.w3.org/2003/05/soap-envelope' 
-                xmlns:a='http://www.w3.org/2005/08/addressing' 
+    <s:Envelope xmlns:s='http://www.w3.org/2003/05/soap-envelope'
+                xmlns:a='http://www.w3.org/2005/08/addressing'
                 xmlns:u='http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd'>
         <s:Header>
         <a:Action s:mustUnderstand='1'>http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue</a:Action>
@@ -178,6 +178,111 @@ Function AddBase64UrlPaddingToString
     }
 }
 
+Function GetRsaCryptoProvider
+{
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory=$true)]
+        [System.Security.Cryptography.RSACryptoServiceProvider]
+        $RsaProvider
+    )
+
+    if($RsaProvider.CspKeyContainerInfo.ProviderType -in 1,12)
+    {
+        $csp=New-Object System.Security.Cryptography.CspParameters
+        $csp.KeyNumber=$RsaProvider.CspKeyContainerInfo.KeyNumber
+        $csp.KeyContainerName=$RsaProvider.CspKeyContainerInfo.KeyContainerName
+        if($RsaProvider.CspKeyContainerInfo.MachineKeyStore)
+        {
+            $csp.Flags=[System.Security.Cryptography.CspProviderFlags]::UseMachineKeyStore
+        }
+        $csp.Flags=$csp.Flags -bor [System.Security.Cryptography.CspProviderFlags]::UseExistingKey
+        $csp.ProviderType=24
+        $NewRsaProvider=New-Object System.Security.Cryptography.RSACryptoServiceProvider($csp)
+        Write-Output $NewRsaProvider
+    }
+    else
+    {
+        Write-Output $RsaProvider
+    }
+}
+
+Function GetCertificateHash
+{
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [System.Security.Cryptography.X509Certificates.X509Certificate2[]]
+        $Certificate
+    )
+    BEGIN
+    {
+
+    }
+    PROCESS
+    {
+        foreach ($Cert in $Certificate)
+        {
+            $Signature=[System.Convert]::ToBase64String($Cert.GetCertHash())
+            Write-Output $Signature
+        }
+    }
+    END
+    {
+
+    }
+}
+
+Function NewClientAssertion
+{
+    param
+    (
+        [System.Uri]
+        $Audience,
+        [Parameter(Mandatory=$true)]
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]
+        $Certificate,
+        [Parameter(Mandatory=$true)]
+        [String]
+        $ClientId,
+        [Parameter(Mandatory=$false)]
+        [String]
+        $JwtId=([Guid]::NewGuid().ToString()),
+        [Parameter(Mandatory=$false)]
+        [datetime]
+        $Expires=($NotBefore.AddMinutes(60)),
+        [Parameter(Mandatory=$false)]
+        [DateTime]
+        $NotBefore=([DateTime]::UtcNow)
+    )
+
+    $JwtHeaders=[ordered]@{
+        "alg"="RS256";
+        "x5t"=($Certificate|GetCertificateHash|AddBase64UrlPaddingToString)
+    }
+    $JwtPayload=[ordered]@{
+        "aud"=$Audience.AbsoluteUri;
+        "exp"= ConvertToUnixTime -DateTime $Expires;
+        "iss"=$ClientId;
+        "jti"=$JwtId;
+        "nbf"=ConvertToUnixTime -DateTime $NotBefore;
+        "sub"=$ClientId;
+    }
+
+    $HeaderJson=$JwtHeaders|ConvertTo-Json -Compress
+    $PayloadJson=$JwtPayload|ConvertTo-Json -Compress
+
+    $HeaderBytes=[System.Text.Encoding]::UTF8.GetBytes($HeaderJson)
+    $HeaderString=[Convert]::ToBase64String($HeaderBytes)|AddBase64UrlPaddingToString
+    $PayloadBytes=[System.Text.Encoding]::UTF8.GetBytes($PayloadJson)
+    $PayloadString=[Convert]::ToBase64String($PayloadBytes)|AddBase64UrlPaddingToString
+
+    $EncodedAssertion="$HeaderString.$PayloadString"
+    Write-Output $EncodedAssertion
+}
+
 <#
     .SYNOPSIS
         Creates a new WinForm hosting a WebBrowser control to navigate to a URI
@@ -217,7 +322,7 @@ Function CreateWebForm
     #New WinForm
     $FormSize = New-Object System.Drawing.Size($FormWidth,$FormHeight)
     $objForm = New-Object System.Windows.Forms.Form
-    
+
     #Navigate on load
     $OnFormLoad={
         param
@@ -230,10 +335,10 @@ Function CreateWebForm
             $e
         )
         Write-Verbose "Loaded! Navigating to $($Script:FormSyncContext.NavigateUri)"
-        $Script:FormSyncContext.Browser.Navigate($Script:FormSyncContext.NavigateUri,$false)    
+        $Script:FormSyncContext.Browser.Navigate($Script:FormSyncContext.NavigateUri,$false)
     }
     $objForm.add_Load($OnFormLoad)
- 
+
     #Add a web browser control
     $webBrowser=New-Object System.Windows.Forms.WebBrowser
     $webBrowser.Location=(New-Object System.Drawing.Point(0,0))
@@ -273,7 +378,7 @@ Function GetMexPolicies
         [System.Xml.XmlDocument]
         $MexDocument
     )
-    
+
     $MexPolicies=@{}
 
     foreach ($policy in $MexDocument.definitions.Policy)
@@ -310,7 +415,7 @@ Function GetMexPolicies
             if($UserNameElem -eq $null -or $UserNameElem.Policy -eq $null -or $UserNameElem.Policy.WssUsernameToken10 -eq $null)
             {
                 continue
-            }         
+            }
             $MexPolicies.Add("#$($policy.Id)",(New-Object PSObject -Property @{Id=$policy.Id;AuthType=1}))
             Write-Verbose "[GetMexPolicies] Username/Password Policy $($policy.Id) Added."
         }
@@ -336,20 +441,20 @@ Function GetMexBindings
     )
 
     $MexBindings=@{}
-    
+
     $MexPolicies=GetMexPolicies -MexDocument $MexDocument
     Write-Verbose "[GetMexBindings] Found $($MexPolicies.Count) Policies"
 
     foreach ($item in $MexDocument.definitions.binding)
     {
-        Write-Verbose "[GetMexBindings] Examining Binding $($item.name)"        
+        Write-Verbose "[GetMexBindings] Examining Binding $($item.name)"
         $ItemName=$item.name
         if([String]::IsNullOrEmpty($ItemName))
         {
             continue
         }
         $PolicyRefNode=$item.PolicyReference
-        
+
         if($PolicyRefNode -eq $null)
         {
             continue
@@ -360,41 +465,41 @@ Function GetMexBindings
         {
             continue
         }
-        
+
         $OperationNode=$item.operation
         if($OperationNode -eq $null)
         {
             continue
         }
-        
+
         $OperationSubNode=$OperationNode.operation
         if($OperationSubNode -eq $null)
         {
             continue
         }
-        
+
         if([String]::IsNullOrEmpty($OperationSubNode.soapAction))
         {
             continue
         }
-        
+
         $BindingNode=$item.binding
         if($BindingNode -eq $null)
         {
             continue
         }
-        
+
         if([String]::IsNullOrEmpty($BindingNode.transport))
         {
             continue
         }
-        
+
         $MexPolicy=$MexPolicies[$ItemUri]
         if($MexPolicy -eq $null)
         {
             continue
         }
-        
+
         $MexBindings.Add($ItemName,$MexPolicy)
         Write-Verbose "[GetMexBindings] Binding $ItemUri - $ItemName Added."
     }
@@ -493,7 +598,7 @@ Function GetWSFedBindings
             continue
         }
         $uri=$BindingName.Split(':',2)|Select-Object -Last 1
-        Write-Debug "[GetWSFedBindings] Examining Port:$uri" 
+        Write-Debug "[GetWSFedBindings] Examining Port:$uri"
         if($MexPolicyBindings[$uri] -eq $null)
         {
             continue
@@ -589,7 +694,7 @@ Function GetWSTrustResponse
         [Int32]
         $LengthInMinutes=10
     )
-    
+
     $Now=[DateTime]::UtcNow
     $UUID=[Guid]::NewGuid()
     $UserName=$Credential.UserName
@@ -663,7 +768,7 @@ Function GetWSTrustAssertionToken
     .PARAMETER Resource
         The Resource Uri to obtain a token for
     .PARAMETER ClientId
-        The registered Azure Active Directory application id 
+        The registered Azure Active Directory application id
     .PARAMETER Credential
         The credential to use for authentication
     .PARAMETER TenantId
@@ -673,7 +778,7 @@ Function GetWSTrustAssertionToken
     .PARAMETER TokenEndpoint
         The Authorization Token Endpoint
     .PARAMETER TokenApiVersion
-        The OAuth Token API Version           
+        The OAuth Token API Version
 #>
 Function GetAzureADUserToken
 {
@@ -733,7 +838,7 @@ Function GetAzureADUserToken
         Retrieves an Authorization Code for an application interactively using the OAuth Consent Framework
     .PARAMETER AuthorizationUri
         The endpoint to navigate for an OAuth authorization code
-        
+
 #>
 Function GetAzureADAuthorizationCode
 {
@@ -816,7 +921,7 @@ Function GetAzureADAuthorizationCode
         Requires the application to allow Implicit Auth
     .PARAMETER AuthorizationUri
         The endpoint to navigate for an OAuth authorization token
-        
+
 #>
 Function GetAzureADAccessToken
 {
@@ -848,11 +953,11 @@ Function GetAzureADAccessToken
         {
             $QueryVals=$uri.AbsoluteUri.Split('#')|Select-Object -Last 1
         }
-        else 
+        else
         {
               $QueryVals=$uri.Query.TrimStart('?')
         }
-        
+
         $QueryParams=$QueryVals.Split('&')
         #Make a hashtable of the query
         $Parameters=@{}
@@ -910,7 +1015,7 @@ Function GetAzureADAccessToken
     .PARAMETER UserPrincipalName
         The user principal name(s) to retrieve details
     .PARAMETER AuthorizationEndpoint
-        The OAuth WSFed Endpoint        
+        The OAuth WSFed Endpoint
 #>
 Function Get-WSTrustUserRealmDetails
 {
@@ -1029,12 +1134,12 @@ Function Get-AzureADUserRealm
                     AuthorizationUrl=$RealmDetails.AuthUrl;
                 }
             }
-            else 
+            else
             {
                 Write-Verbose "[Get-AzureADUserRealm] User is Managed"
                 $UserRealm=New-Object PSObject -Property @{
                     RealmDetails=$RealmDetails;
-                }    
+                }
             }
             Write-Output $UserRealm
         }
@@ -1064,7 +1169,7 @@ Function Get-AzureADOpenIdConfiguration
         $TenantId='common',
         [Parameter(Mandatory=$false)]
         [System.Uri]
-        $AuthorizationUri=$Script:DefaultAuthUrl 
+        $AuthorizationUri=$Script:DefaultAuthUrl
     )
 
     BEGIN
@@ -1083,7 +1188,7 @@ Function Get-AzureADOpenIdConfiguration
             }
             catch [System.Exception] {
                 Write-Warning "[Get-AzureADOpenIdConfiguration] Tenant $id $_"
-            }       
+            }
         }
     }
     END
@@ -1102,7 +1207,7 @@ Function Get-AzureADOpenIdConfiguration
     .PARAMETER RawToken
         The encoded JWT string
     .PARAMETER AsString
-        Returns the decoded JWT as a string delimiting sections with a period 
+        Returns the decoded JWT as a string delimiting sections with a period
 #>
 Function ConvertFrom-EncodedJWT
 {
@@ -1118,7 +1223,7 @@ Function ConvertFrom-EncodedJWT
     )
     BEGIN
     {
-        
+
     }
     PROCESS
     {
@@ -1130,15 +1235,15 @@ Function ConvertFrom-EncodedJWT
             $EncodedHeaders=RemoveBase64UrlPaddingFromString -Data $TokenSections[0]
             $EncodedHeaderBytes=[System.Convert]::FromBase64String($EncodedHeaders)
             $DecodedHeaders=[System.Text.Encoding]::UTF8.GetString($EncodedHeaderBytes)
-    
+
             $EncodedPayload=RemoveBase64UrlPaddingFromString -Data $TokenSections[1]
             $EncodedPayloadBytes=[System.Convert]::FromBase64String($EncodedPayload)
             $DecodedPayload=[System.Text.Encoding]::UTF8.GetString($EncodedPayloadBytes)
-    
+
             #$EncodedSignature=RemoveBase64PaddingFromString -Data $TokenSections[2]
             #$EncodedSignatureBytes=[System.Convert]::FromBase64String($EncodedSignature)
             #$DecodedSignature=[System.Text.Encoding]::UTF8.GetString($EncodedSignatureBytes)
-    
+
             $JwtProperties=@{
                 'headers'   = ($DecodedHeaders|ConvertFrom-Json);
                 'payload'    = ($DecodedPayload|ConvertFrom-Json);
@@ -1154,7 +1259,7 @@ Function ConvertFrom-EncodedJWT
             else
             {
                 Write-Output $DecodedJwt
-            }            
+            }
         }
     }
     END
@@ -1194,7 +1299,7 @@ Function Test-JWTHasExpired
             {
                 Write-Output $true
             }
-            Write-Output $false            
+            Write-Output $false
         }
     }
     END
@@ -1233,7 +1338,7 @@ Function Get-JWTExpiry
         foreach ($item in $Token)
         {
             $DecodedToken=ConvertFrom-EncodedJWT -RawToken $item
-            $ExpireTime=ConvertFromUnixTime -UnixTime $DecodedToken.payload.exp 
+            $ExpireTime=ConvertFromUnixTime -UnixTime $DecodedToken.payload.exp
             if($AsLocal.IsPresent)
             {
                 $ExpireTime=$ExpireTime.ToLocalTime()
@@ -1284,7 +1389,7 @@ Function Get-AzureADAuthorizationCode
     (
         [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
         [System.Object]
-        $ConnectionDetails,        
+        $ConnectionDetails,
         [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Uri]
         $Resource,
@@ -1335,13 +1440,13 @@ Function Get-AzureADAuthorizationCode
         }
         else {
             $RedirectUri=$ConnectionDetails.RedirectUri
-        }        
+        }
         if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
             throw "A Resource value was not present"
         }
         else {
             $Resource=$ConnectionDetails.Resource
-        }        
+        }
         if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri) -eq $false) {
             $RedirectUri=$ConnectionDetails.RedirectUri
         }
@@ -1381,7 +1486,7 @@ Function Get-AzureADAuthorizationCode
     .SYNOPSIS
         Approve an Azure Active Directory Application using the OAuth consent framework
     .PARAMETER ConnectionDetails
-        An object containing all the AAD connection properties    
+        An object containing all the AAD connection properties
     .PARAMETER ClientId
         The registered Azure Active Directory application id
     .PARAMETER AuthorizationCode
@@ -1397,7 +1502,7 @@ Function Get-AzureADAuthorizationCode
     .PARAMETER TokenApiVersion
         The OAuth Token API Version
     .PARAMETER AdminConsent
-        Whether to grant admin consent during the request        
+        Whether to grant admin consent during the request
 #>
 Function Approve-AzureADApplication
 {
@@ -1434,7 +1539,7 @@ Function Approve-AzureADApplication
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Switch]
-        $AdminConsent   
+        $AdminConsent
     )
 
     if($PSCmdlet.ParameterSetName -eq 'object') {
@@ -1475,7 +1580,7 @@ Function Approve-AzureADApplication
     .SYNOPSIS
         Exchanges an Azure Active Directory Authorization Code for a Token
     .PARAMETER ConnectionDetails
-        An object containing all the AAD connection properties     
+        An object containing all the AAD connection properties
     .PARAMETER Resource
         The Resource Uri to obtain a token for
     .PARAMETER ClientId
@@ -1501,7 +1606,7 @@ Function Get-AzureADAccessTokenFromCode
     (
         [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
         [System.Object]
-        $ConnectionDetails,        
+        $ConnectionDetails,
         [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Uri]
         $Resource,
@@ -1543,13 +1648,13 @@ Function Get-AzureADAccessTokenFromCode
         }
         else {
             $AuthorizationCode=$ConnectionDetails.AuthorizationCode
-        }        
+        }
         if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
             throw "A Resource value was not present"
         }
         else {
             $Resource=$ConnectionDetails.Resource
-        }        
+        }
         if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri) -eq $false) {
             $RedirectUri=$ConnectionDetails.RedirectUri
         }
@@ -1581,7 +1686,7 @@ Function Get-AzureADAccessTokenFromCode
     .PARAMETER Resource
         The Resource Uri to obtain a token for
     .PARAMETER ClientId
-        The registered Azure Active Directory application id 
+        The registered Azure Active Directory application id
     .PARAMETER ClientSecret
         The client secret to use for authentication
     .PARAMETER TenantId
@@ -1675,17 +1780,17 @@ Function Get-AzureADClientToken
     .SYNOPSIS
         Retreives an OAuth 2 JWT from Azure Active Directory as a User
     .PARAMETER ConnectionDetails
-        An object containing all the AAD connection properties    
+        An object containing all the AAD connection properties
     .PARAMETER Resource
         The Resource Uri to obtain a token for
     .PARAMETER ClientId
-        The registered Azure Active Directory application id 
+        The registered Azure Active Directory application id
     .PARAMETER Credential
         The credential to use for authentication
     .PARAMETER TenantId
         The Azure Active Directory tenant id or domain name
     .PARAMETER AuthorizationUri
-        The Azure Active Directory Token AuthorizationEndpoint   
+        The Azure Active Directory Token AuthorizationEndpoint
     .PARAMETER TokenEndpoint
         The Authorization Token Endpoint
     .PARAMETER AuthCodeEndpoint
@@ -1814,25 +1919,25 @@ Function Get-AzureADUserToken
     .SYNOPSIS
         Retrieves an OAuth2 JWT using the refresh token framework
     .PARAMETER ConnectionDetails
-        An object containing all the AAD connection properties    
+        An object containing all the AAD connection properties
     .PARAMETER RefreshToken
         The JWT refresh token
     .PARAMETER Resource
         The Resource Uri to obtain a token for
     .PARAMETER ClientId
-        The registered Azure Active Directory application id 
+        The registered Azure Active Directory application id
     .PARAMETER Credential
         The credential to use for authentication
     .PARAMETER TenantId
         The Azure Active Directory tenant id or domain name
     .PARAMETER AuthorizationUri
-        The Azure Active Directory Token AuthorizationEndpoint   
+        The Azure Active Directory Token AuthorizationEndpoint
     .PARAMETER TokenEndpoint
         The Authorization Token Endpoint
     .PARAMETER AuthCodeEndpoint
         The Authorization Code Endpoint
     .PARAMETER TokenApiVersion
-        The OAuth Token API Version     
+        The OAuth Token API Version
 
 #>
 Function Get-AzureADRefreshToken
@@ -1871,7 +1976,7 @@ Function Get-AzureADRefreshToken
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [System.String]
-        $TokenApiVersion=$Script:DefaultTokenApiVersion  
+        $TokenApiVersion=$Script:DefaultTokenApiVersion
     )
 
     if($PSCmdlet.ParameterSetName -eq 'object') {
@@ -1942,7 +2047,7 @@ Function Get-AzureADImplicitFlowToken
     (
         [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
         [System.Object]
-        $ConnectionDetails,        
+        $ConnectionDetails,
         [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Uri]
         $Resource,
@@ -1984,13 +2089,13 @@ Function Get-AzureADImplicitFlowToken
         }
         else {
             $RedirectUri=$ConnectionDetails.RedirectUri
-        }        
+        }
         if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
             throw "A Resource value was not present"
         }
         else {
             $Resource=$ConnectionDetails.Resource
-        }        
+        }
         if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri) -eq $false) {
             $RedirectUri=$ConnectionDetails.RedirectUri
         }
@@ -2020,7 +2125,11 @@ Function Get-AzureADImplicitFlowToken
     return $AuthResult
 }
 
-Function Get-AzureADDiscoveryKeys
+<#
+    .SYNOPSIS
+        Retrieves the Azure AD Token Signing Key
+#>
+Function Get-AzureADDiscoveryKey
 {
     param
     (
@@ -2029,7 +2138,7 @@ Function Get-AzureADDiscoveryKeys
         $TenantId="common",
         [Parameter(Mandatory=$false)]
         [String]
-        $CertificateHash,        
+        $CertificateHash,
         [Parameter(Mandatory=$false)]
         [System.Uri]
         $DiscoveryUri="https://login.windows.net",
@@ -2054,6 +2163,32 @@ Function Get-AzureADDiscoveryKeys
     }
 }
 
+<#
+    .SYNOPSIS
+        Retrieves an OAuth access token using a certificate
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties
+    .PARAMETER Resource
+        The Resource Uri to obtain a token for
+    .PARAMETER Certificate
+        The certificate to sign the token request
+    .PARAMETER NotBefore
+        The start of token validity
+    .PARAMETER Expires
+        The start of token expiration
+    .PARAMETER ClientId
+        The registered Azure Active Directory application id
+    .PARAMETER AuthorizationUri
+        The Azure Active Directory Token AuthorizationEndpoint
+    .PARAMETER TenantId
+        The Azure Active Directory tenant id or domain name
+    .PARAMETER RedirectUri
+        The approved Redirect URI request for the application
+    .PARAMETER AuthEndpoint
+        The OAuth2 authorization endpoint
+    .PARAMETER TokenApiVersion
+        The OAuth Token API Version
+#>
 Function Get-AzureADClientAssertionToken
 {
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
@@ -2077,14 +2212,20 @@ Function Get-AzureADClientAssertionToken
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [DateTime]
-        $NotBefore=([DateTime]::UtcNow),        
+        $NotBefore=([DateTime]::UtcNow),
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [datetime]
-        $Expires=($NotBefore.AddMinutes(60)),  
+        $Expires=($NotBefore.AddMinutes(60)),
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.Uri]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $AssertionType=$Script:OauthClientAssertionType,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
         $AuthorizationUri=$Script:DefaultAuthUrl,
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [Parameter(Mandatory=$false,ParameterSetName='object')]
@@ -2116,8 +2257,9 @@ Function Get-AzureADClientAssertionToken
             $TenantId=$ConnectionDetails.TenantId
         }
     }
+    Write-Verbose "[Get-AzureADClientAssertionToken] Retrieving client assertion token using certificate $($Certificate.GetCertHashString())"
     $TokenUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
-    $TokenUriBuilder.Path="$TenantId/$TokenEndpoint"    
+    $TokenUriBuilder.Path="$TenantId/$TokenEndpoint"
     $Sha=New-Object System.Security.Cryptography.SHA256Cng
     $RsaProvider=GetRsaCryptoProvider -RsaProvider $Certificate.PrivateKey
     try
@@ -2131,14 +2273,15 @@ Function Get-AzureADClientAssertionToken
         $SignedTokenBytes=$RsaProvider.SignData($AssertionBytes,$Sha)
         $SignedToken=[Convert]::ToBase64String($SignedTokenBytes)|AddBase64UrlPaddingToString
         $EncodedAssertion="$ClientAssertion.$SignedToken"
-        #Get the token    
+        #Get the token
         $RequestBody=[ordered]@{
             'grant_type'='client_credentials';
             'client_id'=$ClientId;
             'resource'=$Resource;
             'client_assertion'=$EncodedAssertion;
-            'client_assertion_type'='urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+            'client_assertion_type'=$AssertionType;
         }
+        Write-Verbose "[Get-AzureADClientAssertionToken] Retrieving token with assertion $EncodedAssertion "
         $TokenResponse=Invoke-RestMethod -Uri $TokenUriBuilder.Uri -Method Post -Body $RequestBody -ErrorAction Stop
         Write-Output $TokenResponse
     }
@@ -2149,111 +2292,6 @@ Function Get-AzureADClientAssertionToken
         $RsaProvider.Dispose()
         $Sha.Dispose()
     }
-}
-
-Function GetRsaCryptoProvider
-{
-    [CmdletBinding()]
-    param
-    (
-        [Parameter(Mandatory=$true)]
-        [System.Security.Cryptography.RSACryptoServiceProvider]
-        $RsaProvider        
-    )
-    
-    if($RsaProvider.CspKeyContainerInfo.ProviderType -in 1,12)
-    {
-        $csp=New-Object System.Security.Cryptography.CspParameters 
-        $csp.KeyNumber=$RsaProvider.CspKeyContainerInfo.KeyNumber
-        $csp.KeyContainerName=$RsaProvider.CspKeyContainerInfo.KeyContainerName
-        if($RsaProvider.CspKeyContainerInfo.MachineKeyStore)
-        {
-            $csp.Flags=[System.Security.Cryptography.CspProviderFlags]::UseMachineKeyStore
-        }
-        $csp.Flags=$csp.Flags -bor [System.Security.Cryptography.CspProviderFlags]::UseExistingKey
-        $csp.ProviderType=24
-        $NewRsaProvider=New-Object System.Security.Cryptography.RSACryptoServiceProvider($csp)
-        Write-Output $NewRsaProvider
-    }
-    else
-    {
-        Write-Output $RsaProvider
-    }
-}
-
-Function GetCertificateHash
-{
-    [CmdletBinding()]
-    param
-    (
-        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
-        [System.Security.Cryptography.X509Certificates.X509Certificate2[]]
-        $Certificate
-    )
-    BEGIN
-    {
-
-    }
-    PROCESS
-    {
-        foreach ($Cert in $Certificate)
-        {
-            $Signature=[System.Convert]::ToBase64String($Cert.GetCertHash())
-            Write-Output $Signature
-        }
-    }
-    END
-    {
-
-    }
-}
-
-Function NewClientAssertion
-{
-    param
-    (
-        [System.Uri]
-        $Audience,
-        [Parameter(Mandatory=$true)]
-        [System.Security.Cryptography.X509Certificates.X509Certificate2]
-        $Certificate,
-        [Parameter(Mandatory=$true)]
-        [String]
-        $ClientId,
-        [Parameter(Mandatory=$false)]
-        [String]
-        $JwtId=([Guid]::NewGuid().ToString()),
-        [Parameter(Mandatory=$false)]
-        [datetime]
-        $Expires=($NotBefore.AddMinutes(60)),
-        [Parameter(Mandatory=$false)]
-        [DateTime]
-        $NotBefore=([DateTime]::UtcNow)
-    )
-
-    $JwtHeaders=[ordered]@{
-        "alg"="RS256";
-        "x5t"=($Certificate|GetCertificateHash|AddBase64UrlPaddingToString)
-    }
-    $JwtPayload=[ordered]@{
-        "aud"=$Audience.AbsoluteUri;
-        "exp"= ConvertToUnixTime -DateTime $Expires;
-        "iss"=$ClientId;
-        "jti"=$JwtId;
-        "nbf"=ConvertToUnixTime -DateTime $NotBefore;
-        "sub"=$ClientId;
-    }
-
-    $HeaderJson=$JwtHeaders|ConvertTo-Json -Compress
-    $PayloadJson=$JwtPayload|ConvertTo-Json -Compress
-
-    $HeaderBytes=[System.Text.Encoding]::UTF8.GetBytes($HeaderJson)
-    $HeaderString=[Convert]::ToBase64String($HeaderBytes)|AddBase64UrlPaddingToString
-    $PayloadBytes=[System.Text.Encoding]::UTF8.GetBytes($PayloadJson)
-    $PayloadString=[Convert]::ToBase64String($PayloadBytes)|AddBase64UrlPaddingToString
-
-    $EncodedAssertion="$HeaderString.$PayloadString"
-    Write-Output $EncodedAssertion
 }
 
 #endregion

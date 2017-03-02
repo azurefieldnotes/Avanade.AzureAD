@@ -12,7 +12,7 @@
 RootModule = 'Module'
 
 # Version number of this module.
-ModuleVersion = '1.1.4'
+ModuleVersion = '1.2.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -69,12 +69,12 @@ RequiredAssemblies = 'System.Drawing', 'System.Windows.Forms'
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'Get-AzureADUserToken', 'Get-AzureADAccessTokenFromCode','Get-AzureADRefreshToken', 
-            'Get-AzureADImplicitFlowToken',  'Get-AzureADClientToken', 'Get-AzureADOpenIdConfiguration', 
+FunctionsToExport = 'Get-AzureADUserToken', 'Get-AzureADAccessTokenFromCode','Get-AzureADRefreshToken',
+            'Get-AzureADImplicitFlowToken',  'Get-AzureADClientToken', 'Get-AzureADOpenIdConfiguration',
             'Get-WSTrustUserRealmDetails', 'Get-AzureADUserRealm',
-            'ConvertFrom-EncodedJWT', 'Approve-AzureADApplication', 
+            'ConvertFrom-EncodedJWT', 'Approve-AzureADApplication',
             'Test-JWTHasExpired', 'Get-JWTExpiry','Get-AzureADAuthorizationCode',
-            'Get-AzureADDiscoveryKeys','Get-AzureADClientAssertionToken'
+            'Get-AzureADDiscoveryKey','Get-AzureADClientAssertionToken'
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
@@ -120,7 +120,7 @@ PrivateData = @{
         ExternalModuleDependencies = 'Microsoft.PowerShell.Utility'
 
     } # End of PSData hashtable
-    
+
  } # End of PrivateData hashtable
 
 # HelpInfo URI of this module
