@@ -71,10 +71,9 @@ RequiredAssemblies = 'System.Drawing', 'System.Windows.Forms'
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
 FunctionsToExport = 'Get-AzureADUserToken', 'Get-AzureADAccessTokenFromCode','Get-AzureADRefreshToken',
             'Get-AzureADImplicitFlowToken',  'Get-AzureADClientToken', 'Get-AzureADOpenIdConfiguration',
-            'Get-WSTrustUserRealmDetails', 'Get-AzureADUserRealm',
-            'ConvertFrom-EncodedJWT', 'Approve-AzureADApplication',
+            'Get-WSTrustUserRealmDetails', 'Get-AzureADUserRealm','ConvertFrom-EncodedJWT', 'Approve-AzureADApplication',
             'Test-JWTHasExpired', 'Get-JWTExpiry','Get-AzureADAuthorizationCode',
-            'Get-AzureADDiscoveryKey','Get-AzureADClientAssertionToken'
+            'Get-AzureADDiscoveryKey','Get-AzureADClientAssertionToken','ConvertFrom-AzureADDiscoveryKey'
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()

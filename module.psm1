@@ -7,6 +7,8 @@
 
 #Winforms Sync Context
 $Script:FormSyncContext=[hashtable]::Synchronized(@{})
+#Discovery Key Cache
+$Script:DiscoveryKeyCache=@{}
 
 $Script:DefaultAuthUrl='https://login.microsoftonline.com'
 $Script:DefaultTokenApiVersion="2.1"
@@ -2142,6 +2144,138 @@ Function Get-AzureADImplicitFlowToken
 
 <#
     .SYNOPSIS
+        Retrieves an OAuth access token using a certificate
+    .PARAMETER ConnectionDetails
+        An object containing all the AAD connection properties
+    .PARAMETER Resource
+        The Resource Uri to obtain a token for
+    .PARAMETER Certificate
+        The certificate to sign the token request
+    .PARAMETER NotBefore
+        The start of token validity
+    .PARAMETER Expires
+        The start of token expiration
+    .PARAMETER ClientId
+        The registered Azure Active Directory application id
+    .PARAMETER AuthorizationUri
+        The Azure Active Directory Token AuthorizationEndpoint
+    .PARAMETER TenantId
+        The Azure Active Directory tenant id or domain name
+    .PARAMETER RedirectUri
+        The approved Redirect URI request for the application
+    .PARAMETER AuthEndpoint
+        The OAuth2 authorization endpoint
+    .PARAMETER TokenApiVersion
+        The OAuth Token API Version
+#>
+Function Get-AzureADClientAssertionToken
+{
+    [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
+    param
+    (
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [System.Object]
+        $ConnectionDetails,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.Uri]
+        $Resource=$Script:DefaultAzureManagementUri,
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [System.String]
+        $ClientId,
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]
+        $Certificate,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $TenantId="common",
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [DateTime]
+        $NotBefore=([DateTime]::UtcNow),
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [datetime]
+        $Expires=($NotBefore.AddMinutes(60)),
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $AssertionType=$Script:OauthClientAssertionType,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        $AuthorizationUri=$Script:DefaultAuthUrl,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [System.String]
+        $TokenEndpoint='oauth2/token',
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.String]
+        $TokenApiVersion=$Script:DefaultTokenApiVersion
+    )
+
+    if($PSCmdlet.ParameterSetName -eq 'object') {
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId))
+        {
+            throw "A Client Id must be specified"
+        }
+        else
+        {
+            $ClientId=$ConnectionDetails.ClientId
+        }
+        if($ConnectionDetails.Certificate -eq $null){
+            throw "A Certificate was not present"
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.Resource) -eq $false){
+            $Resource=$ConnectionDetails.Resource
+        }
+        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
+            $TenantId='common'
+        }
+        else {
+            $TenantId=$ConnectionDetails.TenantId
+        }
+    }
+    Write-Verbose "[Get-AzureADClientAssertionToken] Retrieving client assertion token using certificate $($Certificate.GetCertHashString())"
+    $TokenUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
+    $TokenUriBuilder.Path="$TenantId/$TokenEndpoint"
+    $Sha=New-Object System.Security.Cryptography.SHA256Cng
+    $RsaProvider=GetRsaCryptoProvider -RsaProvider $Certificate.PrivateKey
+    try
+    {
+        #Get the client assertion
+        $ClientAssertion=NewClientAssertion -Certificate $Certificate `
+            -ClientId $ClientId -Audience $TokenUriBuilder.Uri `
+            -Expires $Expires -NotBefore $NotBefore
+        #Sign it
+        $AssertionBytes=[System.Text.Encoding]::UTF8.GetBytes($ClientAssertion)
+        $SignedTokenBytes=$RsaProvider.SignData($AssertionBytes,$Sha)
+        $SignedToken=[Convert]::ToBase64String($SignedTokenBytes)|AddBase64UrlPaddingToString
+        $EncodedAssertion="$ClientAssertion.$SignedToken"
+        #Get the token
+        $RequestBody=[ordered]@{
+            'grant_type'='client_credentials';
+            'client_id'=$ClientId;
+            'resource'=$Resource;
+            'client_assertion'=$EncodedAssertion;
+            'client_assertion_type'=$AssertionType;
+        }
+        Write-Verbose "[Get-AzureADClientAssertionToken] Retrieving token with gigned assertion $EncodedAssertion"
+        $TokenResponse=Invoke-RestMethod -Uri $TokenUriBuilder.Uri -Method Post -Body $RequestBody -ErrorAction Stop
+        Write-Output $TokenResponse
+    }
+    catch {
+        throw "Error Acquiring Client Asesertion Token $_"
+    }
+    finally {
+        $RsaProvider.Dispose()
+        $Sha.Dispose()
+    }
+}
+
+#endregion
+
+<#
+    .SYNOPSIS
         Retrieves the Azure AD Token Signing Key
 #>
 Function Get-AzureADDiscoveryKey
@@ -2181,130 +2315,43 @@ Function Get-AzureADDiscoveryKey
 
 <#
     .SYNOPSIS
-        Retrieves an OAuth access token using a certificate
-    .PARAMETER ConnectionDetails
-        An object containing all the AAD connection properties
-    .PARAMETER Resource
-        The Resource Uri to obtain a token for
-    .PARAMETER Certificate
-        The certificate to sign the token request
-    .PARAMETER NotBefore
-        The start of token validity
-    .PARAMETER Expires
-        The start of token expiration
-    .PARAMETER ClientId
-        The registered Azure Active Directory application id
-    .PARAMETER AuthorizationUri
-        The Azure Active Directory Token AuthorizationEndpoint
-    .PARAMETER TenantId
-        The Azure Active Directory tenant id or domain name
-    .PARAMETER RedirectUri
-        The approved Redirect URI request for the application
-    .PARAMETER AuthEndpoint
-        The OAuth2 authorization endpoint
-    .PARAMETER TokenApiVersion
-        The OAuth Token API Version
+        Converts a discovery key object to an x509 Certificate
+    .PARAMETER Key
+        The open id discovery key object
 #>
-Function Get-AzureADClientAssertionToken
+Function ConvertFrom-AzureADDiscoveryKey
 {
-    [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
+    [CmdletBinding()]
+    [OutputType([System.Security.Cryptography.X509Certificates.X509Certificate2])]
     param
     (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
-        [System.Object]
-        $ConnectionDetails,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.Uri]
-        $Resource=$Script:DefaultAzureManagementUri,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.String]
-        $ClientId=$Script:DefaultAzureManagementClientId,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
-        [System.Security.Cryptography.X509Certificates.X509Certificate2]
-        $Certificate,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.String]
-        $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [DateTime]
-        $NotBefore=([DateTime]::UtcNow),
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [datetime]
-        $Expires=($NotBefore.AddMinutes(60)),
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.Uri]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.String]
-        $AssertionType=$Script:OauthClientAssertionType,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [System.String]
-        $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [System.String]
-        $TokenApiVersion=$Script:DefaultTokenApiVersion
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [PSObject[]]
+        $Key
     )
-
-    if($PSCmdlet.ParameterSetName -eq 'object') {
-        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId) -eq $false){
-            $ClientId=$ConnectionDetails.ClientId
-        }
-        if($ConnectionDetails.Certificate -eq $null){
-            throw "A Certificate was not present"
-        }
-        if([String]::IsNullOrEmpty($ConnectionDetails.Resource) -eq $false){
-            $Resource=$ConnectionDetails.Resource
-        }
-        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
-            $TenantId='common'
-        }
-        else {
-            $TenantId=$ConnectionDetails.TenantId
-        }
-    }
-    Write-Verbose "[Get-AzureADClientAssertionToken] Retrieving client assertion token using certificate $($Certificate.GetCertHashString())"
-    $TokenUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
-    $TokenUriBuilder.Path="$TenantId/$TokenEndpoint"
-    $Sha=New-Object System.Security.Cryptography.SHA256Cng
-    $RsaProvider=GetRsaCryptoProvider -RsaProvider $Certificate.PrivateKey
-    try
+    BEGIN
     {
-        #Get the client assertion
-        $ClientAssertion=NewClientAssertion -Certificate $MyCert `
-            -ClientId $ClientId -Audience $TokenUriBuilder.Uri `
-            -Expires $Expires -NotBefore $NotBefore
-        #Sign it
-        $AssertionBytes=[System.Text.Encoding]::UTF8.GetBytes($ClientAssertion)
-        $SignedTokenBytes=$RsaProvider.SignData($AssertionBytes,$Sha)
-        $SignedToken=[Convert]::ToBase64String($SignedTokenBytes)|AddBase64UrlPaddingToString
-        $EncodedAssertion="$ClientAssertion.$SignedToken"
-        #Get the token
-        $RequestBody=[ordered]@{
-            'grant_type'='client_credentials';
-            'client_id'=$ClientId;
-            'resource'=$Resource;
-            'client_assertion'=$EncodedAssertion;
-            'client_assertion_type'=$AssertionType;
+
+    }
+    PROCESS
+    {
+        foreach ($item in $Key)
+        {
+            if($Script:DiscoveryKeyCache.ContainsKey($item.x5t))
+            {
+                Write-Verbose "[ConvertFrom-AzureADDiscoveryKey] Using cached certificate matching hash $($item.x5t)"
+                $Cert=$Script:DiscoveryKeyCache[$item.x5t]
+            }
+            else
+            {
+                $Cert=New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(([Convert]::FromBase64String($item.x5c[0])),$item.kid)
+                $Script:DiscoveryKeyCache.Add($item.x5t,$Cert)
+            }
+            Write-Output $Cert
         }
-        Write-Verbose "[Get-AzureADClientAssertionToken] Retrieving token with gigned assertion $EncodedAssertion"
-        $TokenResponse=Invoke-RestMethod -Uri $TokenUriBuilder.Uri -Method Post -Body $RequestBody -ErrorAction Stop
-        Write-Output $TokenResponse
     }
-    catch {
-        throw "Error Acquiring Client Asesertion Token $_"
-    }
-    finally {
-        $RsaProvider.Dispose()
-        $Sha.Dispose()
+    END
+    {
+
     }
 }
-
-#endregion
