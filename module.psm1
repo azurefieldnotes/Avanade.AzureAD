@@ -1821,6 +1821,7 @@ Function Get-AzureADUserToken
         [pscredential]
         $Credential,
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
         [System.String]
         $TenantId="common",
         [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
@@ -1871,12 +1872,27 @@ Function Get-AzureADUserToken
     Write-Verbose "[Get-AzureADUserToken] Retrieving OAuth Token ClientId:$ClientId Resource:$Resource Tenant:$TenantId as $($Credential.UserName)"
     if($PSCmdlet.ParameterSetName -eq 'usemsa')
     {
+        Write-Verbose "[Get-AzureADUserToken] Using Microsoft Account - Requires Interactive Login"
+        if($TenantId -ne 'common' -and $TenantId -notmatch '^[{(]?[0-9A-F]{8}[-]?([0-9A-F]{4}[-]?){3}[0-9A-F]{12}[)}]?$')
+        {
+            Write-Verbose "[Get-AzureADUserToken] Retrieving OpenId openid-configuration for $TenantId"
+            $OpenIdConfig=Get-AzureADOpenIdConfiguration -TenantId $TenantId
+            [Uri]$AuthUri=$OpenIdConfig.authorization_endpoint
+            $TenantId=$AuthUri.AbsolutePath.TrimStart('/').Split('/')|Select-Object -First 1
+        }
         $AuthCode=Get-AzureADAuthorizationCode -Resource $Resource -ClientId $ClientId `
-            -RedirectUri $Script:DefaultNativeRedirectUri -TenantId $TenantId -AuthorizationUri $AuthorizationUri `
+            -RedirectUri $Script:DefaultNativeRedirectUri -TenantId 'common' -AuthorizationUri $AuthorizationUri `
             -AuthEndpoint $AuthCodeEndpoint -TokenApiVersion $TokenApiVersion
         $AuthToken=Get-AzureADAccessTokenFromCode -Resource $Resource -ClientId $ClientId -RedirectUri $Script:DefaultNativeRedirectUri `
-            -AuthorizationCode $AuthCode -TenantId $TenantId -AuthorizationUri $AuthorizationUri `
+            -AuthorizationCode $AuthCode -TenantId 'common' -AuthorizationUri $AuthorizationUri `
             -TokenEndpoint $TokenEndpoint -TokenApiVersion $TokenApiVersion
+        if($TenantId -ne 'common')
+        {
+            Write-Verbose "[Get-AzureADUserToken] Retrieving Refresh token for $TenantId audience"
+            $AuthToken=Get-AzureADRefreshToken -Resource $Resource -RefreshToken $AuthToken.refresh_token `
+                -ClientId $ClientId -TenantId $TenantId `
+                -AuthorizationUri $AuthorizationUri -TokenEndpoint $TokenEndpoint
+        }
         Write-Output $AuthToken
     }
     else
@@ -1901,11 +1917,13 @@ Function Get-AzureADUserToken
         if([String]::IsNullOrEmpty($UserRealm.UsernamePasswordEndpoint) -eq $false)
         {
             $AssertionResult=GetWSTrustAssertionToken -Endpoint $UserRealm.UsernamePasswordEndpoint -Credential $Credential
-            if ($AssertionResult -ne $null) {
+            if ($AssertionResult -ne $null)
+            {
                 Write-Verbose "[Get-AzureADUserToken] Successfully received a WSFed User Assertion Token!"
                 Write-Output $AssertionResult
             }
-            else {
+            else
+            {
                 throw "Failed to receive a WSFed User Assertion Token!"
             }
         }
@@ -1955,9 +1973,9 @@ Function Get-AzureADRefreshToken
         [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [string]
         $RefreshToken,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [string]
-        $ClientId,
+        $ClientId=$Script:DefaultAzureManagementUri,
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TenantId="common",
@@ -1980,10 +1998,7 @@ Function Get-AzureADRefreshToken
     )
 
     if($PSCmdlet.ParameterSetName -eq 'object') {
-        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId)){
-            throw "A ClientId value was not present"
-        }
-        else {
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId) -eq $false){
             $ClientId=$ConnectionDetails.ClientId
         }
         if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
@@ -2060,9 +2075,9 @@ Function Get-AzureADImplicitFlowToken
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Uri]
-        $AuthorizationUri=$Script:DefaultAuthUrl,
+        $AuthorizationUri,
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $AuthEndpoint='oauth2/authorize',
@@ -2122,7 +2137,7 @@ Function Get-AzureADImplicitFlowToken
     }
     $TokenUriBuilder.Query=$TokenQuery
     $AuthResult=GetAzureADAccessToken -AuthorizationUri $TokenUriBuilder.Uri
-    return $AuthResult
+    Write-Output $AuthResult
 }
 
 <#
@@ -2131,6 +2146,7 @@ Function Get-AzureADImplicitFlowToken
 #>
 Function Get-AzureADDiscoveryKey
 {
+    [CmdletBinding(ConfirmImpact='None')]
     param
     (
         [Parameter(Mandatory=$false)]
@@ -2200,9 +2216,9 @@ Function Get-AzureADClientAssertionToken
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.Uri]
         $Resource=$Script:DefaultAzureManagementUri,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
-        $ClientId,
+        $ClientId=$Script:DefaultAzureManagementClientId,
         [Parameter(Mandatory=$true,ParameterSetName='explicit')]
         [System.Security.Cryptography.X509Certificates.X509Certificate2]
         $Certificate,
@@ -2238,10 +2254,7 @@ Function Get-AzureADClientAssertionToken
     )
 
     if($PSCmdlet.ParameterSetName -eq 'object') {
-        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId)){
-            throw "A ClientId value was not present"
-        }
-        else {
+        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId) -eq $false){
             $ClientId=$ConnectionDetails.ClientId
         }
         if($ConnectionDetails.Certificate -eq $null){
@@ -2281,7 +2294,7 @@ Function Get-AzureADClientAssertionToken
             'client_assertion'=$EncodedAssertion;
             'client_assertion_type'=$AssertionType;
         }
-        Write-Verbose "[Get-AzureADClientAssertionToken] Retrieving token with assertion $EncodedAssertion "
+        Write-Verbose "[Get-AzureADClientAssertionToken] Retrieving token with gigned assertion $EncodedAssertion"
         $TokenResponse=Invoke-RestMethod -Uri $TokenUriBuilder.Uri -Method Post -Body $RequestBody -ErrorAction Stop
         Write-Output $TokenResponse
     }
