@@ -86,7 +86,8 @@ Function ConvertFromUnixTime
         $UnixTime
     )
     $epoch = New-Object System.DateTime(1970, 1, 1, 0, 0, 0, 0)
-    return $epoch.AddSeconds($UnixTime)
+    $normaltime=$epoch.AddSeconds($UnixTime)
+    Write-Output $normaltime
 }
 
 <#
@@ -106,7 +107,8 @@ Function ConvertToUnixTime
     )
     $epoch = New-Object System.DateTime(1970, 1, 1, 0, 0, 0, 0);
     $delta = $DateTime - $epoch;
-    return [Math]::Floor($delta.TotalSeconds);
+    $unixtime=[Math]::Floor($delta.TotalSeconds)
+    Write-Output $unixtime
 }
 
 <#
@@ -266,10 +268,10 @@ Function NewClientAssertion
     }
     $JwtPayload=[ordered]@{
         "aud"=$Audience.AbsoluteUri;
-        "exp"= ConvertToUnixTime -DateTime $Expires;
+        "exp"= (ConvertToUnixTime -DateTime $Expires);
         "iss"=$ClientId;
         "jti"=$JwtId;
-        "nbf"=ConvertToUnixTime -DateTime $NotBefore;
+        "nbf"= (ConvertToUnixTime -DateTime $NotBefore);
         "sub"=$ClientId;
     }
 
@@ -361,7 +363,7 @@ Function CreateWebForm
     $Script:FormSyncContext.Form=$objForm
     $Script:FormSyncContext.Browser=$webBrowser
     $Script:FormSyncContext.NavigateUri=$NavigateUri.AbsoluteUri
-    return $objForm
+    Write-Output $objForm
 }
 
 <#
@@ -422,7 +424,7 @@ Function GetMexPolicies
             Write-Verbose "[GetMexPolicies] Username/Password Policy $($policy.Id) Added."
         }
     }
-    return $MexPolicies
+    Write-Output $MexPolicies
 }
 
 <#
@@ -506,7 +508,7 @@ Function GetMexBindings
         Write-Verbose "[GetMexBindings] Binding $ItemUri - $ItemName Added."
     }
 
-    return $MexBindings
+    Write-Output $MexBindings
 }
 
 <#
@@ -556,7 +558,7 @@ Function GetSecurityTokensFromEnvelope
             $Tokens+=$Token
         }
     }
-    return $Tokens
+    Write-Output $Tokens
 }
 
 Function GetAzureADUserRealm
@@ -576,7 +578,7 @@ Function GetAzureADUserRealm
     $RealmUriBuilder.Path="/common/UserRealm"
     $RealmUriBuilder.Query="api-version=2.1&user=$UserPrincipalName"
     $RealmDetails=Invoke-RestMethod -Uri $RealmUriBuilder.Uri -ContentType "application/json" -ErrorAction Stop
-    return $RealmDetails
+    Write-Output $RealmDetails
 }
 
 Function GetWSFedBindings
@@ -620,7 +622,7 @@ Function GetWSFedBindings
         $MexPolicyBindings[$uri]|Add-Member -MemberType NoteProperty -Name Url -Value $EndpointUri
     }
     Write-Verbose "Found $($MexPolicyBindings.Count) binding(s)."
-    return $MexPolicyBindings
+    Write-Output $MexPolicyBindings
 }
 
 <#
@@ -664,7 +666,7 @@ Function GetWSFedEndpoint
         if($Binding.AuthType -eq $DesiredAuth)
         {
             Write-Debug "[GetWSFedEndpoint] Endpoint:$Binding.Url is a match!"
-            return $Binding.Url
+            Write-Output $Binding.Url
         }
     }
 }
@@ -718,7 +720,7 @@ Function GetWSTrustResponse
     if ($WSFedResponse -eq $null) {
         throw "Unable to create a User Assertion"
     }
-    return $WSFedResponse
+    Write-Output $WSFedResponse
 }
 
 <#
@@ -761,7 +763,7 @@ Function GetWSTrustAssertionToken
         'assertion'=$EncodedAssertion;
     }
     $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $RequestBody -ErrorAction Stop
-    return $Response
+    Write-Output $Response
 }
 
 <#
@@ -831,7 +833,7 @@ Function GetAzureADUserToken
     }
     Write-Verbose "Acquiring Token From $($UriBuilder.Uri)"
     $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
-    return $Response
+    Write-Output $Response
 
 }
 
@@ -854,65 +856,74 @@ Function GetAzureADAuthorizationCode
     )
 
     $ConsentForm=CreateWebForm -NavigateUri $AuthorizationUri -FormTitle "Sign in to Azure Active Directory" -FormWidth 500 -FormHeight 450
-    $ConsentBrowser=$ConsentForm.Controls|Select-Object -First 1
-    $OnBrowserNavigated={
-        param
-        (
-            [Parameter()]
-            [object]
-            $sender,
-            [Parameter()]
-            [System.Windows.Forms.WebBrowserNavigatedEventArgs]
-            $e
-        )
-        $TheForm=$sender.Parent
-        Write-Verbose "[GetAzureADAuthorizationCode] Navigated $($e.Url)"
-        $uri=New-Object System.Uri($e.Url)
-        $QueryParams=$uri.Query.TrimStart('?').Split('&')
-        #Make a hashtable of the query
-        $Parameters=@{}
-        foreach ($item in $QueryParams)
-        {
-            Write-Verbose "[GetAzureADAuthorizationCode] Parameter:$item"
-            $pieces=$item.Split('=')
-            $Parameters.Add($pieces[0],[System.Uri]::UnescapeDataString($pieces[1]))
-        }
-        #Look for the Authorization Code
-        if($Parameters.ContainsKey('code'))
-        {
-            Write-Verbose "[GetAzureADAuthorizationCode] Authorization Code Received!"
-            $Script:FormSyncContext.Code=$Parameters['code']
-            $TheForm.DialogResult=[System.Windows.Forms.DialogResult]::OK
-            $TheForm.Close()
-        }
-        #Look for an error (cancel)
-        elseif($Parameters.ContainsKey('error'))
-        {
-            $TheForm.DialogResult=[System.Windows.Forms.DialogResult]::Abort
-            $TheForm.Close()
-            $Script:FormSyncContext.Error="$($Parameters['error']):$($Parameters['error_description'].Replace('+'," "))"
-            Write-Verbose "[GetAzureADAuthorizationCode] Error Retrieving Access Code:$($Script:FormSyncContext.Error)"
-        }
-    }
-    $OnDocumentCompleted={
-        param
-        (
-            [object]$sender,
-            [System.Windows.Forms.WebBrowserDocumentCompletedEventArgs]$e
-        )
-        $TheForm=$sender.Parent
-        Write-Verbose "[GetAzureADAuthorizationCode] Document Completed! Size:$($sender.Document.Body.ScrollRectangle.Size)"
-        $TheForm.Text= $sender.Document.Title
-    }
-    $ConsentBrowser.add_DocumentCompleted($OnDocumentCompleted)
-    $ConsentBrowser.add_Navigated($OnBrowserNavigated)
-    $ConsentResult=$ConsentForm.ShowDialog()
-    if($ConsentResult -eq [System.Windows.Forms.DialogResult]::OK)
+    try
     {
-        return $Script:FormSyncContext.Code
+        $ConsentBrowser=$ConsentForm.Controls|Select-Object -First 1
+        $OnBrowserNavigated={
+            param
+            (
+                [Parameter()]
+                [object]
+                $sender,
+                [Parameter()]
+                [System.Windows.Forms.WebBrowserNavigatedEventArgs]
+                $e
+            )
+            $TheForm=$sender.Parent
+            Write-Verbose "[GetAzureADAuthorizationCode] Navigated $($e.Url)"
+            $uri=New-Object System.Uri($e.Url)
+            $QueryParams=$uri.Query.TrimStart('?').Split('&')
+            #Make a hashtable of the query
+            $Parameters=@{}
+            foreach ($item in $QueryParams)
+            {
+                Write-Verbose "[GetAzureADAuthorizationCode] Parameter:$item"
+                $pieces=$item.Split('=')
+                $Parameters.Add($pieces[0],[System.Uri]::UnescapeDataString($pieces[1]))
+            }
+            #Look for the Authorization Code
+            if($Parameters.ContainsKey('code'))
+            {
+                Write-Verbose "[GetAzureADAuthorizationCode] Authorization Code Received!"
+                $Script:FormSyncContext.Code=$Parameters['code']
+                $TheForm.DialogResult=[System.Windows.Forms.DialogResult]::OK
+                $TheForm.Close()
+            }
+            #Look for an error (cancel)
+            elseif($Parameters.ContainsKey('error'))
+            {
+                $TheForm.DialogResult=[System.Windows.Forms.DialogResult]::Abort
+                $TheForm.Close()
+                $Script:FormSyncContext.Error="$($Parameters['error']):$($Parameters['error_description'].Replace('+'," "))"
+                Write-Verbose "[GetAzureADAuthorizationCode] Error Retrieving Access Code:$($Script:FormSyncContext.Error)"
+            }
+        }
+        $OnDocumentCompleted={
+            param
+            (
+                [object]$sender,
+                [System.Windows.Forms.WebBrowserDocumentCompletedEventArgs]$e
+            )
+            $TheForm=$sender.Parent
+            Write-Verbose "[GetAzureADAuthorizationCode] Document Completed! Size:$($sender.Document.Body.ScrollRectangle.Size)"
+            $TheForm.Text= $sender.Document.Title
+        }
+        $ConsentBrowser.add_DocumentCompleted($OnDocumentCompleted)
+        $ConsentBrowser.add_Navigated($OnBrowserNavigated)
+        $ConsentResult=$ConsentForm.ShowDialog()
+        if($ConsentResult -eq [System.Windows.Forms.DialogResult]::OK)
+        {
+            Write-Output $Script:FormSyncContext.Code
+        }
+        else
+        {
+            throw "The Operation Was Cancelled. $($Script:FormSyncContext.Error)"    
+        }        
     }
-    throw "The Operation Was Cancelled. $($Script:FormSyncContext.Error)"
-
+    finally
+    {
+        $ConsentForm.Dispose()   
+    }
 }
 
 <#
@@ -1001,9 +1012,12 @@ Function GetAzureADAccessToken
     $AuthResult=$AuthForm.ShowDialog()
     if($AuthResult -eq [System.Windows.Forms.DialogResult]::OK)
     {
-        return $Script:FormSyncContext.AuthResult
+        Write-Output $Script:FormSyncContext.AuthResult
     }
-    throw "The Operation Was Cancelled. $($Script:FormSyncContext.Error)"
+    else
+    {
+        "The Operation Was Cancelled. $($Script:FormSyncContext.Error)"
+    }
 
 }
 
@@ -1575,7 +1589,7 @@ Function Approve-AzureADApplication
     $QueryStr+="&response_type=code&prompt=$ConsentType"
     $ConsentUriBuilder.Query=$QueryStr
     $AuthCode=GetAzureADAuthorizationCode -AuthorizationUri $ConsentUriBuilder.Uri.AbsoluteUri
-    return $AuthCode
+    Write-Output $AuthCode
 }
 
 <#
@@ -1677,7 +1691,7 @@ Function Get-AzureADAccessTokenFromCode
         'redirect_uri'=$RedirectUri.AbsoluteUri;
     }
     $Response=Invoke-RestMethod -Method Post -Uri $TokenUriBuilder.Uri -Body $Request -ErrorAction Stop
-    return $Response
+    Write-Output $Response
 }
 
 <#
@@ -1775,7 +1789,7 @@ Function Get-AzureADClientToken
     }
     $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
     Write-Verbose "[Get-AzureADClientToken] Success!"
-    return $Response
+    Write-Output $Response
 }
 
 <#
@@ -2033,7 +2047,7 @@ Function Get-AzureADRefreshToken
     }
     Write-Verbose "[Get-AzureADRefreshToken] Acquiring Token From $($UriBuilder.Uri)"
     $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
-    return $Response
+    Write-Output $Response
 }
 
 <#
@@ -2266,12 +2280,13 @@ Function Get-AzureADClientAssertionToken
         $TokenResponse=Invoke-RestMethod -Uri $TokenUriBuilder.Uri -Method Post -Body $RequestBody -ErrorAction Stop
         Write-Output $TokenResponse
     }
-    catch {
-        throw "Error Acquiring Client Asesertion Token $_"
+    catch
+    {
+        throw "Error Acquiring Client Assertion Token $_"
     }
-    finally {
-        $RsaProvider.Dispose()
-        $Sha.Dispose()
+    finally
+    {
+        $Sha.Dispose()   
     }
 }
 
