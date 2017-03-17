@@ -1585,7 +1585,7 @@ Function Approve-AzureADApplication
             $TenantId=$ConnectionDetails.TenantId
         }
     }
-    if($NativeClient.IsPresent -and [String]::IsNullOrEmpty($RedirectUri))
+    if($NativeClient.IsPresent -and $RedirectUri -eq $null)
     {
         Write-Verbose "[Approve-AzureADApplication] Using Default Native Redirect URI:$Script:DefaultNativeRedirectUri"
         $RedirectUri=$Script:DefaultNativeRedirectUri
