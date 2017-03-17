@@ -1533,7 +1533,10 @@ Function Approve-AzureADApplication
         $ClientId,
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.Uri]
-        $RedirectUri=$Script:DefaultNativeRedirectUri,
+        $RedirectUri,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [System.Uri]
+        $Resource,        
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [System.String]
         $TenantId="common",
@@ -1555,7 +1558,11 @@ Function Approve-AzureADApplication
         [Parameter(Mandatory=$false,ParameterSetName='explicit')]
         [Parameter(Mandatory=$false,ParameterSetName='object')]
         [Switch]
-        $AdminConsent
+        $AdminConsent,
+        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Switch]
+        $NativeClient        
     )
 
     if($PSCmdlet.ParameterSetName -eq 'object') {
@@ -1565,15 +1572,23 @@ Function Approve-AzureADApplication
         else {
             $ClientId=$ConnectionDetails.ClientId
         }
-        if([String]::IsNullOrEmpty($ConnectionDetails.RedirectUri) -eq $false){
+        if($ConnectionDetails.RedirectUri -ne $null){
             $RedirectUri=$ConnectionDetails.RedirectUri
         }
+        if($ConnectionDetails.Resource -ne $null){
+            $Resource=$ConnectionDetails.Resource
+        }        
         if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
             $TenantId='common'
         }
         else {
             $TenantId=$ConnectionDetails.TenantId
         }
+    }
+    if($NativeClient.IsPresent -and [String]::IsNullOrEmpty($RedirectUri))
+    {
+        Write-Verbose "[Approve-AzureADApplication] Using Default Native Redirect URI:$Script:DefaultNativeRedirectUri"
+        $RedirectUri=$Script:DefaultNativeRedirectUri
     }
 
     $ConsentUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
@@ -1585,7 +1600,9 @@ Function Approve-AzureADApplication
         $ConsentType="admin_consent"
     }
     $QueryStr+="&client_id=$($ClientId)"
-    $QueryStr+="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))"
+    if ($RedirectUri -ne $null) {
+        $QueryStr+="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))"
+    }
     $QueryStr+="&response_type=code&prompt=$ConsentType"
     $ConsentUriBuilder.Query=$QueryStr
     $AuthCode=GetAzureADAuthorizationCode -AuthorizationUri $ConsentUriBuilder.Uri.AbsoluteUri
