@@ -1519,6 +1519,8 @@ Function Get-AzureADAuthorizationCode
         The OAuth Token API Version
     .PARAMETER AdminConsent
         Whether to grant admin consent during the request
+    .PARAMETER NativeClient
+        Uses default native client redirect uri if one is not specified
 #>
 Function Approve-AzureADApplication
 {
