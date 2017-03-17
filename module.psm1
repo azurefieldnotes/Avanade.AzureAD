@@ -1597,11 +1597,15 @@ Function Approve-AzureADApplication
     $ConsentType="consent"
     if($AdminConsent.IsPresent)
     {
+        Write-Verbose "[Approve-AzureADApplication] Admin Consent Present!"
         $ConsentType="admin_consent"
     }
     $QueryStr+="&client_id=$($ClientId)"
     if ($RedirectUri -ne $null) {
         $QueryStr+="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))"
+    }
+    if ($Resource -ne $null) {
+        $QueryStr+="&resource=$([Uri]::EscapeDataString($Resource.AbsoluteUri))"
     }
     $QueryStr+="&response_type=code&prompt=$ConsentType"
     $ConsentUriBuilder.Query=$QueryStr
