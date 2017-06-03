@@ -1039,13 +1039,13 @@ Function Get-WSTrustUserRealmDetails
     [CmdletBinding(ConfirmImpact='None')]
     param
     (
-        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [System.String[]]
         $UserPrincipalName,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $AuthorizationEndpoint=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [String]
         $UserRealmApiVersion=$Script:WSFedUserRealmApiVersion
     )
@@ -1107,13 +1107,13 @@ Function Get-AzureADUserRealm
     [CmdletBinding(ConfirmImpact='None')]
     param
     (
-        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [System.String[]]
         $UserPrincipalName,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $AuthorizationEndpoint=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [String]
         $UserRealmApiVersion=$Script:WSFedUserRealmApiVersion
     )
@@ -1180,10 +1180,10 @@ Function Get-AzureADOpenIdConfiguration
     [CmdletBinding(ConfirmImpact='None')]
     param
     (
-        [Parameter(Mandatory=$false,ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$false,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [String[]]
         $TenantId='common',
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl
     )
@@ -1230,10 +1230,10 @@ Function ConvertFrom-EncodedJWT
     [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [String[]]
         $RawToken,
-        [Parameter()]
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
         [Switch]
         $AsString
     )
@@ -1296,7 +1296,7 @@ Function Test-JWTHasExpired
     [CmdletBinding()]
     param
     (
-       [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+       [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
        [String[]]
        $Token
     )
@@ -1337,10 +1337,10 @@ Function Get-JWTExpiry
     [CmdletBinding()]
     param
     (
-       [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+       [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
        [String[]]
        $Token,
-       [Parameter()]
+       [Parameter(ValueFromPipelineByPropertyName=$true)]
        [Switch]
        $AsLocal
     )
@@ -1403,43 +1403,43 @@ Function Get-AzureADAuthorizationCode
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $Resource,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $ClientId,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $RedirectUri,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
         [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $AuthEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenApiVersion=$Script:DefaultTokenApiVersion,
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [Switch]
         $Consent,
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [Switch]
         $AdminConsent,
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [String[]]
         $Scope=@('user_impersonation','openid')
     )
@@ -1527,44 +1527,44 @@ Function Approve-AzureADApplication
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [string]
         $ClientId,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $RedirectUri,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $Resource,        
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $AuthCodeEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         $TokenApiVersion=$Script:DefaultTokenApiVersion,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [Switch]
         $AdminConsent,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [Switch]
-        $NativeClient        
+        $NativeClient
     )
 
     if($PSCmdlet.ParameterSetName -eq 'object') {
@@ -1643,34 +1643,34 @@ Function Get-AzureADAccessTokenFromCode
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $Resource,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $RedirectUri=$Script:DefaultNativeRedirectUri,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $ClientId,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $AuthorizationCode,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenApiVersion=$Script:DefaultTokenApiVersion
     )
@@ -1744,31 +1744,31 @@ Function Get-AzureADClientToken
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $Resource,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $ClientId,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $ClientSecret,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenApiVersion=$Script:DefaultTokenApiVersion
     )
@@ -1845,45 +1845,45 @@ Function Get-AzureADUserToken
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $Resource=$Script:DefaultAzureManagementUri,
-        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $ClientId=$Script:DefaultAzureManagementClientId,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [pscredential]
         $Credential,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $AuthCodeEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenApiVersion=$Script:DefaultTokenApiVersion,
-        [Parameter(Mandatory=$false,ParameterSetName='usemsa')]
+        [Parameter(Mandatory=$false,ParameterSetName='usemsa',ValueFromPipelineByPropertyName=$true)]
         [Switch]
         $UseMicrosoftAccount
     )
@@ -2005,36 +2005,36 @@ Function Get-AzureADRefreshToken
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $Resource,
-        [Parameter(Mandatory=$true,ParameterSetName='object')]
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [string]
         $RefreshToken,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [string]
         $ClientId=$Script:DefaultAzureManagementUri,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $AuthCodeEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenApiVersion=$Script:DefaultTokenApiVersion
     )
@@ -2102,34 +2102,34 @@ Function Get-AzureADImplicitFlowToken
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $Resource,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $ClientId,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $RedirectUri,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $AuthorizationUri,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $AuthEndpoint='oauth2/authorize',
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenApiVersion=$Script:DefaultTokenApiVersion,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [Switch]
         $Consent,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [Switch]
         $AdminConsent
     )
@@ -2213,42 +2213,42 @@ Function Get-AzureADClientAssertionToken
     [CmdletBinding(ConfirmImpact='None',DefaultParameterSetName='explicit')]
     param
     (
-        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName='object',ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [System.Object]
         $ConnectionDetails,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $Resource=$Script:DefaultAzureManagementUri,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $ClientId,
-        [Parameter(Mandatory=$true,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.Security.Cryptography.X509Certificates.X509Certificate2]
         $Certificate,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TenantId="common",
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [DateTime]
         $NotBefore=([DateTime]::UtcNow),
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [datetime]
         $Expires=($NotBefore.AddMinutes(60)),
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $AssertionType=$Script:OauthClientAssertionType,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false,ParameterSetName='object')]
-        [Parameter(Mandatory=$false,ParameterSetName='explicit')]
+        [Parameter(Mandatory=$false,ParameterSetName='object',ValueFromPipelineByPropertyName=$true)]
+        [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [System.String]
         $TokenApiVersion=$Script:DefaultTokenApiVersion
     )
@@ -2324,16 +2324,16 @@ Function Get-AzureADDiscoveryKey
     [CmdletBinding(ConfirmImpact='None')]
     param
     (
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [String]
         $TenantId="common",
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [String]
         $CertificateHash,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [System.Uri]
         $DiscoveryUri="https://login.windows.net",
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [String]
         $KeyPath="discovery/keys"
     )
@@ -2366,7 +2366,7 @@ Function ConvertFrom-AzureADDiscoveryKey
     [OutputType([System.Security.Cryptography.X509Certificates.X509Certificate2])]
     param
     (
-        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [PSObject[]]
         $Key
     )
