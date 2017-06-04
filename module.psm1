@@ -1120,7 +1120,7 @@ Function Get-AzureADUserRealm
 
     BEGIN
     {
-        $AllRealmDetails=@()
+        
     }
     PROCESS
     {
