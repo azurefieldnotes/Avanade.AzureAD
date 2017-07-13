@@ -37,4 +37,9 @@ For all intents and purposes this is a swath of ADAL.NET functionality reimpleme
     * Returns the set of openid discovery certficate details
 * ConvertFrom-AzureADDiscoveryKey
     * Converts an openid discovery key to a certificate
+
+### Notes
+#### Version 1.2.5
+- Removed obsolete object parameter set
+
 ## Read More at [Azure Field Notes Blog][] or follow us on Twitter at [@azurefieldnotes][]
