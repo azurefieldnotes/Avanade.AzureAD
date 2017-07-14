@@ -32,6 +32,21 @@ $Script:SamlBearer20TokenType = "urn:ietf:params:oauth:grant-type:saml2-bearer";
 $Script:JwtBearerTokenType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 #endregion
 
+$Global:Azure_ActiveDirectory_WellKnownResourceIds=@{
+    ARM='https://management.core.windows.net'
+    Portal='https://portal.azure.com'
+    Vault='https://vault.windows.net'
+}
+$Global:Azure_ActiveDirectory_WellKnownClientIds=@{
+    ARM="1950a258-227b-4e31-a9cf-717495945fc2";
+    Portal='c44b4083-3bb0-49c1-b47d-974e53cbdf3c';
+}
+$Global:Azure_ActiveDirectory_WellKnownConnections=@{
+    ARM=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['ARM'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
+    Portal=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Portal'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['Portal']}
+    Vault=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Vault'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
+}
+
 #region STS Envelope
 $Script:WSTrustSoapEnvelopeTemplate=@"
     <s:Envelope xmlns:s='http://www.w3.org/2003/05/soap-envelope'
@@ -79,15 +94,17 @@ $Script:WSTrustSoapEnvelopeTemplate=@"
 Function ConvertFromUnixTime
 {
     [OutputType([System.DateTime])]
+    [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory=$true)]
-        [double]
-        $UnixTime
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true)]
+        [double[]]$UnixTime
     )
-    $epoch = New-Object System.DateTime(1970, 1, 1, 0, 0, 0, 0)
-    $normaltime=$epoch.AddSeconds($UnixTime)
-    Write-Output $normaltime
+    foreach ($item in $UnixTime) {
+        $epoch = New-Object System.DateTime(1970, 1, 1, 0, 0, 0, 0)
+        $normaltime=$epoch.AddSeconds($item)
+        Write-Output $normaltime        
+    }
 }
 
 <#
@@ -99,16 +116,21 @@ Function ConvertFromUnixTime
 Function ConvertToUnixTime
 {
     [OutputType([System.Double])]
+    [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory=$true)]
-        [datetime]
-        $DateTime
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true)]
+        [datetime[]]$DateTime
     )
-    $epoch = New-Object System.DateTime(1970, 1, 1, 0, 0, 0, 0);
-    $delta = $DateTime - $epoch;
-    $unixtime=[Math]::Floor($delta.TotalSeconds)
-    Write-Output $unixtime
+    PROCESS
+    {
+        foreach ($item in $DateTime) {
+            $epoch = New-Object System.DateTime(1970, 1, 1, 0, 0, 0, 0);
+            $delta = $item - $epoch;
+            $unixtime=[Math]::Floor($delta.TotalSeconds)
+            Write-Output $unixtime        
+        }        
+    }
 }
 
 <#
@@ -119,15 +141,12 @@ Function ConvertToUnixTime
 #>
 Function RemoveBase64UrlPaddingFromString
 {
+    [CmdletBinding()]
     param
     (
         [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
         [String[]]$Data
     )
-    BEGIN
-    {
-
-    }
     PROCESS
     {
         foreach ($item in $Data)
@@ -143,10 +162,6 @@ Function RemoveBase64UrlPaddingFromString
             Write-Output $UnpaddedData
         }
     }
-    END
-    {
-
-    }
 }
 
 <#
@@ -157,15 +172,12 @@ Function RemoveBase64UrlPaddingFromString
 #>
 Function AddBase64UrlPaddingToString
 {
+    [CmdletBinding()]
     param
     (
         [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
         [String[]]$Data
     )
-    BEGIN
-    {
-
-    }
     PROCESS
     {
         foreach ($item in $Data)
@@ -175,10 +187,6 @@ Function AddBase64UrlPaddingToString
             $CleanedInput=$CleanedInput.Replace('+','-').Replace('/','_')
             Write-Output $CleanedInput
         }
-    }
-    END
-    {
-
     }
 }
 
@@ -243,23 +251,18 @@ Function NewClientAssertion
 {
     param
     (
-        [System.Uri]
-        $Audience,
-        [Parameter(Mandatory=$true)]
-        [System.Security.Cryptography.X509Certificates.X509Certificate2]
-        $Certificate,
-        [Parameter(Mandatory=$true)]
-        [String]
-        $ClientId,
-        [Parameter(Mandatory=$false)]
-        [String]
-        $JwtId=([Guid]::NewGuid().ToString()),
-        [Parameter(Mandatory=$false)]
-        [datetime]
-        $Expires=($NotBefore.AddMinutes(60)),
-        [Parameter(Mandatory=$false)]
-        [DateTime]
-        $NotBefore=([DateTime]::UtcNow)
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.Uri]$Audience,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [String]$ClientId,
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [String]$JwtId=([Guid]::NewGuid().ToString()),
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [datetime]$Expires=($NotBefore.AddMinutes(60)),
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [DateTime]$NotBefore=([DateTime]::UtcNow)
     )
 
     $JwtHeaders=[ordered]@{
@@ -305,21 +308,16 @@ Function CreateWebForm
     [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory=$true)]
-        [System.Uri]
-        $NavigateUri,
-        [Parameter(Mandatory=$true)]
-        [string]
-        $FormTitle,
-        [Parameter(Mandatory=$true)]
-        [int]
-        $FormWidth,
-        [Parameter(Mandatory=$true)]
-        [int]
-        $FormHeight,
-        [Parameter(Mandatory=$false)]
-        [System.Windows.Forms.FormStartPosition]
-        $StartupPosition=[System.Windows.Forms.FormStartPosition]::CenterParent
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.Uri]$NavigateUri,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [string]$FormTitle,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [int]$FormWidth,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [int]$FormHeight,
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [System.Windows.Forms.FormStartPosition]$StartupPosition=[System.Windows.Forms.FormStartPosition]::CenterParent
     )
 
     $Script:FormSyncContext=[hashtable]::Synchronized(@{})
@@ -379,8 +377,7 @@ Function GetMexPolicies
     param
     (
         [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
-        [System.Xml.XmlDocument]
-        $MexDocument
+        [System.Xml.XmlDocument]$MexDocument
     )
 
     $MexPolicies=@{}
@@ -440,8 +437,7 @@ Function GetMexBindings
     param
     (
         [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
-        [System.Xml.XmlDocument]
-        $MexDocument
+        [System.Xml.XmlDocument]$MexDocument
     )
 
     $MexBindings=@{}
@@ -523,42 +519,47 @@ Function GetSecurityTokensFromEnvelope
     [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory)]
-        [System.Xml.XmlDocument]
-        $StsResponse
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.Xml.XmlDocument[]]$StsResponse
     )
-    $Tokens=@()
-    $EnvelopeBody=$StsResponse.Envelope.Body
-    $TokenResponseCollection=$EnvelopeBody.RequestSecurityTokenResponseCollection
-    if($TokenResponseCollection -ne $null)
+    PROCESS
     {
-        foreach ($TokenResponse in $TokenResponseCollection.RequestSecurityTokenResponse)
+        foreach ($item in $StsResponse)
         {
-            $TokenTypeId=$TokenResponse.TokenType
-            $RequestedToken=$TokenResponse.RequestedSecurityToken
-            $TokenAssertion=$RequestedToken.Assertion.OuterXml
-            if($TokenTypeId -eq $Script:Saml1AssertionType)
+            $Tokens=@()
+            $EnvelopeBody=$StsResponse.Envelope.Body
+            $TokenResponseCollection=$EnvelopeBody.RequestSecurityTokenResponseCollection
+            if($TokenResponseCollection -ne $null)
             {
-                $AssertionType=$Script:SamlBearer11TokenType
+                foreach ($TokenResponse in $TokenResponseCollection.RequestSecurityTokenResponse)
+                {
+                    $TokenTypeId=$TokenResponse.TokenType
+                    $RequestedToken=$TokenResponse.RequestedSecurityToken
+                    $TokenAssertion=$RequestedToken.Assertion.OuterXml
+                    if($TokenTypeId -eq $Script:Saml1AssertionType)
+                    {
+                        $AssertionType=$Script:SamlBearer11TokenType
+                    }
+                    elseif($TokenTypeId -eq $Script:Saml2AssertionType)
+                    {
+                        $AssertionType=$Script:SamlBearer20TokenType
+                    }
+                    #We will default to 2.0 like
+                    else
+                    {
+                        $AssertionType=$Script:SamlBearer20TokenType
+                    }
+                    $Token=New-Object psobject -Property @{
+                        AssertionType=$AssertionType;
+                        TokenType=$TokenTypeId;
+                        Token=$TokenAssertion;
+                    }
+                    $Tokens+=$Token
+                }
             }
-            elseif($TokenTypeId -eq $Script:Saml2AssertionType)
-            {
-                $AssertionType=$Script:SamlBearer20TokenType
-            }
-            #We will default to 2.0 like
-            else
-            {
-                $AssertionType=$Script:SamlBearer20TokenType
-            }
-            $Token=New-Object psobject -Property @{
-                AssertionType=$AssertionType;
-                TokenType=$TokenTypeId;
-                Token=$TokenAssertion;
-            }
-            $Tokens+=$Token
-        }
+            Write-Output $Tokens            
+        }        
     }
-    Write-Output $Tokens
 }
 
 Function GetAzureADUserRealm
@@ -567,18 +568,21 @@ Function GetAzureADUserRealm
     [CmdletBinding(ConfirmImpact='None')]
     param
     (
-        [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
-        [System.String]
-        $UserPrincipalName,
-        [Parameter(Mandatory=$false)]
-        [System.Uri]
-        $AuthorizationEndpoint=$Script:DefaultAuthUrl
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.String[]]$UserPrincipalName,
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [System.Uri]$AuthorizationEndpoint=$Script:DefaultAuthUrl
     )
-    $RealmUriBuilder=New-Object System.UriBuilder($AuthorizationEndpoint)
-    $RealmUriBuilder.Path="/common/UserRealm"
-    $RealmUriBuilder.Query="api-version=2.1&user=$UserPrincipalName"
-    $RealmDetails=Invoke-RestMethod -Uri $RealmUriBuilder.Uri -ContentType "application/json" -ErrorAction Stop
-    Write-Output $RealmDetails
+    PROCESS
+    {
+        foreach ($item in $UserPrincipalName) {
+            $RealmUriBuilder=New-Object System.UriBuilder($AuthorizationEndpoint)
+            $RealmUriBuilder.Path="/common/UserRealm"
+            $RealmUriBuilder.Query="api-version=2.1&user=$item"
+            $RealmDetails=Invoke-RestMethod -Uri $RealmUriBuilder.Uri -ContentType "application/json" -ErrorAction Stop
+            Write-Output $RealmDetails
+        }        
+    }
 }
 
 Function GetWSFedBindings
@@ -587,42 +591,46 @@ Function GetWSFedBindings
     [CmdletBinding(ConfirmImpact='None')]
     param
     (
-        [Parameter(Mandatory=$true)]
-        [System.Xml.XmlDocument]
-        $MexDocument
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.Xml.XmlDocument[]]$MexDocument
     )
-
-    $MexPolicyBindings=GetMexBindings -MexDocument $MexDocument
-    Write-Verbose "[GetWSFedBindings] Found $($MexPolicyBindings.Count) binding(s)"
-    foreach($port in $MexDocument.definitions.service.port)
+    PROCESS
     {
-        $BindingName=$port.binding
-        if([String]::IsNullOrEmpty($BindingName))
+        foreach ($item in $MexDocument)
         {
-            continue
+            $MexPolicyBindings=GetMexBindings -MexDocument $item
+            Write-Verbose "[GetWSFedBindings] Found $($MexPolicyBindings.Count) binding(s)"
+            foreach($port in $item.definitions.service.port)
+            {
+                $BindingName=$port.binding
+                if([String]::IsNullOrEmpty($BindingName))
+                {
+                    continue
+                }
+                $uri=$BindingName.Split(':',2)|Select-Object -Last 1
+                Write-Debug "[GetWSFedBindings] Examining Port:$uri"
+                if($MexPolicyBindings[$uri] -eq $null)
+                {
+                    continue
+                }
+                $EndpointNode=$port.EndpointReference
+                if($EndpointNode -eq $null)
+                {
+                    continue
+                }
+                $AddressNode=$EndpointNode.Address
+                if($AddressNode -eq $null)
+                {
+                    continue
+                }
+                Write-Verbose "[GetWSFedBindings] Adding Url:$AddressNode for item $uri"
+                $EndpointUri=New-Object System.Uri($AddressNode)
+                $MexPolicyBindings[$uri]|Add-Member -MemberType NoteProperty -Name Url -Value $EndpointUri
+            }
+            Write-Verbose "Found $($MexPolicyBindings.Count) binding(s)."
+            Write-Output $MexPolicyBindings            
         }
-        $uri=$BindingName.Split(':',2)|Select-Object -Last 1
-        Write-Debug "[GetWSFedBindings] Examining Port:$uri"
-        if($MexPolicyBindings[$uri] -eq $null)
-        {
-            continue
-        }
-        $EndpointNode=$port.EndpointReference
-        if($EndpointNode -eq $null)
-        {
-            continue
-        }
-        $AddressNode=$EndpointNode.Address
-        if($AddressNode -eq $null)
-        {
-            continue
-        }
-        Write-Verbose "[GetWSFedBindings] Adding Url:$AddressNode for item $uri"
-        $EndpointUri=New-Object System.Uri($AddressNode)
-        $MexPolicyBindings[$uri]|Add-Member -MemberType NoteProperty -Name Url -Value $EndpointUri
     }
-    Write-Verbose "Found $($MexPolicyBindings.Count) binding(s)."
-    Write-Output $MexPolicyBindings
 }
 
 <#
@@ -639,13 +647,11 @@ Function GetWSFedEndpoint
     [OutputType([System.Uri])]
     param
     (
-        [Parameter(Mandatory=$true)]
-        [System.Xml.XmlDocument]
-        $MexDocument,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.Xml.XmlDocument]$MexDocument,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
         [ValidateSet("IntegratedAuth","UsernamePassword")]
-        [System.String]
-        $AuthType
+        [System.String]$AuthType
     )
     $DesiredAuth=0
     if($AuthType -eq "IntegratedAuth")
@@ -685,18 +691,14 @@ Function GetWSTrustResponse
     [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory=$true)]
-        [System.Uri]
-        $AuthUri,
-        [Parameter(Mandatory=$true)]
-        [pscredential]
-        $Credential,
-        [Parameter(Mandatory=$false)]
-        [String]
-        $SoapEnvelopeTemplate=$Script:WSTrustSoapEnvelopeTemplate,
-        [Parameter(Mandatory=$false)]
-        [Int32]
-        $LengthInMinutes=10
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.Uri]$AuthUri,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [pscredential]$Credential,
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [String]$SoapEnvelopeTemplate=$Script:WSTrustSoapEnvelopeTemplate,
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [Int32]$LengthInMinutes=10
     )
 
     $Now=[DateTime]::UtcNow
@@ -733,14 +735,13 @@ Function GetWSTrustResponse
 #>
 Function GetWSTrustAssertionToken
 {
+    [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory=$true)]
-        [System.Uri]
-        $Endpoint,
-        [Parameter(Mandatory=$true)]
-        [pscredential]
-        $Credential
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.Uri]$Endpoint,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [pscredential]$Credential
     )
     #TODO:See if we can do integrated auth....
     Write-Verbose "[GetWSTrustAssertionToken] Retrieving SAML Token from $Endpoint"
@@ -790,30 +791,22 @@ Function GetAzureADUserToken
     [CmdletBinding(ConfirmImpact='None')]
     param
     (
-        [Parameter(Mandatory=$true)]
-        [System.Uri]
-        $Resource,
-        [Parameter(Mandatory=$true)]
-        [System.String]
-        $ClientId,
-        [Parameter(Mandatory=$true)]
-        [pscredential]
-        $Credential,
-        [Parameter(Mandatory=$true)]
-        [System.String]
-        $TenantId,
-        [Parameter(Mandatory=$false)]
-        [System.Uri]
-        $AuthorizationUri=$Script:DefaultAuthUrl,
-        [Parameter(Mandatory=$false)]
-        [System.String]
-        $TokenEndpoint='oauth2/token',
-        [Parameter(Mandatory=$false)]
-        [System.String]
-        $TokenApiVersion=$Script:DefaultTokenApiVersion,
-        [Parameter(Mandatory=$false)]
-        [System.String]
-        $TokenScope="openid"
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.Uri]$Resource,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.String]$ClientId,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [pscredential]$Credential,
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.String]$TenantId,
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [System.Uri]$AuthorizationUri=$Script:DefaultAuthUrl,
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [System.String]$TokenEndpoint='oauth2/token',
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [System.String]$TokenApiVersion=$Script:DefaultTokenApiVersion,
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
+        [System.String]$TokenScope="openid"
     )
 
     $UserName=$Credential.UserName
@@ -834,7 +827,6 @@ Function GetAzureADUserToken
     Write-Verbose "Acquiring Token From $($UriBuilder.Uri)"
     $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
     Write-Output $Response
-
 }
 
 <#
@@ -850,9 +842,8 @@ Function GetAzureADAuthorizationCode
     [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory=$true)]
-        [System.Uri]
-        $AuthorizationUri
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
+        [System.Uri]$AuthorizationUri
     )
 
     $ConsentForm=CreateWebForm -NavigateUri $AuthorizationUri -FormTitle "Sign in to Azure Active Directory" -FormWidth 500 -FormHeight 450
@@ -936,15 +927,14 @@ Function GetAzureADAuthorizationCode
         The endpoint to navigate for an OAuth authorization token
 
 #>
-Function GetAzureADAccessToken
+Function GetAzureADTokenByWebForm
 {
     [OutputType([String])]
     [CmdletBinding()]
     param
     (
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
-        [System.Uri]
-        $AuthorizationUri
+        [System.Uri]$AuthorizationUri
     )
 
     $AuthForm=CreateWebForm -NavigateUri $AuthorizationUri -FormTitle "Sign in to Azure Active Directory" -FormWidth 500 -FormHeight 450
@@ -1040,14 +1030,11 @@ Function Get-WSTrustUserRealmDetails
     param
     (
         [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
-        [System.String[]]
-        $UserPrincipalName,
+        [System.String[]]$UserPrincipalName,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [System.Uri]
-        $AuthorizationEndpoint=$Script:DefaultAuthUrl,
+        [System.Uri]$AuthorizationEndpoint=$Script:DefaultAuthUrl,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [String]
-        $UserRealmApiVersion=$Script:WSFedUserRealmApiVersion
+        [String]$UserRealmApiVersion=$Script:WSFedUserRealmApiVersion
     )
     BEGIN
     {
@@ -1072,10 +1059,6 @@ Function Get-WSTrustUserRealmDetails
                 Write-Warning "[Get-WSTrustUserRealmDetails] $upn version:$UserRealmApiVersion  $_"
             }
         }
-    }
-    END
-    {
-
     }
 }
 
@@ -1108,20 +1091,13 @@ Function Get-AzureADUserRealm
     param
     (
         [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
-        [System.String[]]
-        $UserPrincipalName,
+        [System.String[]]$UserPrincipalName,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [System.Uri]
-        $AuthorizationEndpoint=$Script:DefaultAuthUrl,
+        [System.Uri]$AuthorizationEndpoint=$Script:DefaultAuthUrl,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [String]
-        $UserRealmApiVersion=$Script:WSFedUserRealmApiVersion
+        [String]$UserRealmApiVersion=$Script:WSFedUserRealmApiVersion
     )
 
-    BEGIN
-    {
-        
-    }
     PROCESS
     {
         foreach ($UPN in $UserPrincipalName)
@@ -1160,11 +1136,6 @@ Function Get-AzureADUserRealm
             Write-Output $UserRealm
         }
     }
-    END
-    {
-
-    }
-
 }
 
 <#
@@ -1181,17 +1152,10 @@ Function Get-AzureADOpenIdConfiguration
     param
     (
         [Parameter(Mandatory=$false,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
-        [String[]]
-        $TenantId='common',
+        [String[]]$TenantId='common',
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [System.Uri]
-        $AuthorizationUri=$Script:DefaultAuthUrl
+        [System.Uri]$AuthorizationUri=$Script:DefaultAuthUrl
     )
-
-    BEGIN
-    {
-
-    }
     PROCESS
     {
         foreach ($id in $TenantId)
@@ -1206,10 +1170,6 @@ Function Get-AzureADOpenIdConfiguration
                 Write-Warning "[Get-AzureADOpenIdConfiguration] Tenant $id $_"
             }
         }
-    }
-    END
-    {
-
     }
 }
 
@@ -1231,16 +1191,10 @@ Function ConvertFrom-EncodedJWT
     param
     (
         [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
-        [String[]]
-        $RawToken,
+        [String[]]$RawToken,
         [Parameter(ValueFromPipelineByPropertyName=$true)]
-        [Switch]
-        $AsString
+        [Switch]$AsString
     )
-    BEGIN
-    {
-
-    }
     PROCESS
     {
         foreach ($JwtString in $RawToken)
@@ -1278,11 +1232,6 @@ Function ConvertFrom-EncodedJWT
             }
         }
     }
-    END
-    {
-
-    }
-
 }
 
 <#
@@ -1297,13 +1246,8 @@ Function Test-JWTHasExpired
     param
     (
        [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
-       [String[]]
-       $Token
+       [String[]]$Token
     )
-    BEGIN
-    {
-
-    }
     PROCESS
     {
         foreach ($item in $Token)
@@ -1317,10 +1261,6 @@ Function Test-JWTHasExpired
             }
             Write-Output $false
         }
-    }
-    END
-    {
-
     }
 }
 
@@ -1338,17 +1278,10 @@ Function Get-JWTExpiry
     param
     (
        [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
-       [String[]]
-       $Token,
+       [String[]]$Token,
        [Parameter(ValueFromPipelineByPropertyName=$true)]
-       [Switch]
-       $AsLocal
+       [Switch]$AsLocal
     )
-
-    BEGIN
-    {
-
-    }
     PROCESS
     {
         foreach ($item in $Token)
@@ -1361,10 +1294,6 @@ Function Get-JWTExpiry
             }
             Write-Output $ExpireTime
         }
-    }
-    END
-    {
-
     }
 }
 
@@ -1413,8 +1342,7 @@ Function Get-AzureADAuthorizationCode
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
         [System.Uri]$RedirectUri,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [System.String]
-        $TenantId="common",
+        [System.String]$TenantId="common",
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [System.Uri]$AuthorizationUri=$Script:DefaultAuthUrl,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
@@ -1784,6 +1712,8 @@ Function Get-AzureADUserToken
 <#
     .SYNOPSIS
         Retrieves an OAuth2 JWT using the refresh token framework
+    .DESCRIPTION
+        Retrieves an OAuth2 JWT using the refresh token framework
     .PARAMETER ConnectionDetails
         An object containing all the AAD connection properties
     .PARAMETER RefreshToken
@@ -1866,6 +1796,8 @@ Function Get-AzureADRefreshToken
 <#
     .SYNOPSIS
         Retrieves an OAuth access token interactively for an application allowing Implicit Flow
+    .DESCRIPTION
+        Retrieves an OAuth access token interactively for an application allowing Implicit Flow        
     .PARAMETER ConnectionDetails
         An object containing all the AAD connection properties
     .PARAMETER Resource
@@ -1929,13 +1861,15 @@ Function Get-AzureADImplicitFlowToken
         $TokenQuery+="&prompt=login"
     }
     $TokenUriBuilder.Query=$TokenQuery
-    $AuthResult=GetAzureADAccessToken -AuthorizationUri $TokenUriBuilder.Uri
+    $AuthResult=GetAzureADTokenByWebForm -AuthorizationUri $TokenUriBuilder.Uri
     Write-Output $AuthResult
 }
 
 <#
     .SYNOPSIS
         Retrieves an OAuth access token using a certificate
+    .DESCRIPTION
+        Retrieves an OAuth access token using a certificate        
     .PARAMETER ConnectionDetails
         An object containing all the AAD connection properties
     .PARAMETER Resource
@@ -2029,6 +1963,14 @@ Function Get-AzureADClientAssertionToken
 <#
     .SYNOPSIS
         Retrieves the Azure AD Token Signing Key
+    .DESCRIPTION
+        Retrieves the Azure AD Token Signing Key
+    .PARAMETER TenantId
+        The Azure AD Tenant Id
+    .PARAMETER CertficateHash
+        The discovery key Hash
+    .PARAMETER DiscoveryUri
+        The discovery key URI
 #>
 Function Get-AzureADDiscoveryKey
 {
@@ -2036,17 +1978,13 @@ Function Get-AzureADDiscoveryKey
     param
     (
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [String]
-        $TenantId="common",
+        [String]$TenantId="common",
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [String]
-        $CertificateHash,
+        [String]$CertificateHash,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [System.Uri]
-        $DiscoveryUri="https://login.windows.net",
+        [System.Uri]$DiscoveryUri="https://login.windows.net",
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [String]
-        $KeyPath="discovery/keys"
+        [String]$KeyPath="discovery/keys"
     )
 
     $KeyUriBld=New-Object System.UriBuilder($DiscoveryUri)
@@ -2068,6 +2006,8 @@ Function Get-AzureADDiscoveryKey
 <#
     .SYNOPSIS
         Converts a discovery key object to an x509 Certificate
+    .DESCRIPTION
+        Converts a discovery key object to an x509 Certificate        
     .PARAMETER Key
         The open id discovery key object
 #>
@@ -2078,13 +2018,8 @@ Function ConvertFrom-AzureADDiscoveryKey
     param
     (
         [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
-        [PSObject[]]
-        $Key
+        [PSObject[]]$Key
     )
-    BEGIN
-    {
-
-    }
     PROCESS
     {
         foreach ($item in $Key)
@@ -2101,9 +2036,5 @@ Function ConvertFrom-AzureADDiscoveryKey
             }
             Write-Output $Cert
         }
-    }
-    END
-    {
-
     }
 }
