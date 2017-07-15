@@ -37,7 +37,7 @@ $Global:Azure_ActiveDirectory_WellKnownClientIds=@{
     ARM=$Script:DefaultAzureManagementClientId;
     Portal=$Script:DefaultAzurePortalClientId;
 }
-$Global:Azure_ActiveDirectory_WellKnownConnections=New-Object -Property @{
+$Global:Azure_ActiveDirectory_WellKnownConnections=New-Object psobject -Property @{
     ARM=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['ARM'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
     Portal=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Portal'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['Portal']}
     Vault=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Vault'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
