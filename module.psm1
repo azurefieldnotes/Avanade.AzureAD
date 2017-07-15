@@ -10,19 +10,47 @@ $Script:FormSyncContext=[hashtable]::Synchronized(@{})
 #Discovery Key Cache
 $Script:DiscoveryKeyCache=@{}
 
+
+#Default Native Client Redirect Uri
+$Script:DefaultNativeRedirectUri="urn:ietf:wg:oauth:2.0:oob"
+
 $Script:DefaultAuthUrl='https://login.microsoftonline.com'
 $Script:DefaultTokenApiVersion="2.1"
 $Script:WSFedUserRealmApiVersion="1.0"
 #Fungible resource id for ASM and ARM
 $Script:DefaultAzureManagementUri='https://management.core.windows.net/'
-$Script:DefaultAzurePortalUri='https://portal.azure.com'
+$Script:DefaultAzurePortalUri='https://portal.azure.com/'
 $Script:DefaultAzureVaultUri='https://vault.azure.net'
+$Script:DefaultAzureADGraphUri='https://graph.windows.net/'
 #Native client id for ASM,ARM,graph
 $Script:DefaultAzureManagementClientId='1950a258-227b-4e31-a9cf-717495945fc2'
 #Native client id for Portal
 $Script:DefaultAzurePortalClientId='c44b4083-3bb0-49c1-b47d-974e53cbdf3c'
-#Default Native Client Redirect Uri
-$Script:DefaultNativeRedirectUri="urn:ietf:wg:oauth:2.0:oob"
+
+$Global:Azure_ActiveDirectory_WellKnownResourceIds=@{
+    ARM=$Script:DefaultAzureManagementUri;
+    Portal=$Script:DefaultAzurePortalUri;
+    Vault=$Script:DefaultAzureVaultUri;
+    Graph=$Script:DefaultAzureADGraphUri;
+}
+$Global:Azure_ActiveDirectory_WellKnownClientIds=@{
+    ARM=$Script:DefaultAzureManagementClientId;
+    Portal=$Script:DefaultAzurePortalClientId;
+}
+$Global:Azure_ActiveDirectory_WellKnownConnections=New-Object -Property @{
+    ARM=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['ARM'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
+    Portal=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Portal'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['Portal']}
+    Vault=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Vault'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
+    Graph=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Graph'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
+}
+
+$Global:Azure_ActiveDirectory_Defaults=New-Object psobject -Property @{
+    DefaultUri=$Script:DefaultAuthUrl;
+    DefaultRedirectUri=$Script:DefaultNativeRedirectUri;
+    Connections=$Global:Azure_ActiveDirectory_WellKnownConnections;
+}
+#endregion
+
 $Script:OauthClientAssertionType='urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
 
 #region SAML Constants
@@ -32,22 +60,6 @@ $Script:SamlBearer11TokenType="urn:ietf:params:oauth:grant-type:saml1_1-bearer"
 $Script:SamlBearer20TokenType = "urn:ietf:params:oauth:grant-type:saml2-bearer";
 #TODO:OAuth OnBehalfOf
 $Script:JwtBearerTokenType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
-#endregion
-
-$Global:Azure_ActiveDirectory_WellKnownResourceIds=@{
-    ARM=$Script:DefaultAzureManagementUri
-    Portal=$Script:DefaultAzurePortalUri
-    Vault=$Script:DefaultAzureVaultUri
-}
-$Global:Azure_ActiveDirectory_WellKnownClientIds=@{
-    ARM=$Script:DefaultAzureManagementClientId;
-    Portal=$Script:DefaultAzurePortalClientId;
-}
-$Global:Azure_ActiveDirectory_WellKnownConnections=@{
-    ARM=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['ARM'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
-    Portal=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Portal'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['Portal']}
-    Vault=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Vault'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
-}
 
 #region STS Envelope
 $Script:WSTrustSoapEnvelopeTemplate=@"
