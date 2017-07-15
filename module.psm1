@@ -19,26 +19,31 @@ $Script:DefaultTokenApiVersion="2.1"
 $Script:WSFedUserRealmApiVersion="1.0"
 #Fungible resource id for ASM and ARM
 $Script:DefaultAzureManagementUri='https://management.core.windows.net/'
+$Script:DefaultARMUri='https://management.azure.com/'
 $Script:DefaultAzurePortalUri='https://portal.azure.com/'
 $Script:DefaultAzureVaultUri='https://vault.azure.net'
+#Fungible resource id for Legacy and Modern Graph API
 $Script:DefaultAzureADGraphUri='https://graph.windows.net/'
+$Script:DefaultMicrosoftGraphUri='https://graph.microsoft.com/'
 #Native client id for ASM,ARM,graph
 $Script:DefaultAzureManagementClientId='1950a258-227b-4e31-a9cf-717495945fc2'
 #Native client id for Portal
 $Script:DefaultAzurePortalClientId='c44b4083-3bb0-49c1-b47d-974e53cbdf3c'
 
 $Global:Azure_ActiveDirectory_WellKnownResourceIds=@{
-    ARM=$Script:DefaultAzureManagementUri;
+    ARM=$Script:DefaultARMUri;
+    ASM=$Script:DefaultAzureManagementUri;
     Portal=$Script:DefaultAzurePortalUri;
     Vault=$Script:DefaultAzureVaultUri;
     Graph=$Script:DefaultAzureADGraphUri;
+    MicrosoftGraph=$Script:DefaultMicrosoftGraphUri;
 }
 $Global:Azure_ActiveDirectory_WellKnownClientIds=@{
     ARM=$Script:DefaultAzureManagementClientId;
     Portal=$Script:DefaultAzurePortalClientId;
 }
 $Global:Azure_ActiveDirectory_WellKnownConnections=New-Object psobject -Property @{
-    ARM=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['ARM'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
+    ARM=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['ASM'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
     Portal=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Portal'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['Portal']}
     Vault=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Vault'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
     Graph=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Graph'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
