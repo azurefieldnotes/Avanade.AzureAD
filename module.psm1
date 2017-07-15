@@ -14,7 +14,9 @@ $Script:DefaultAuthUrl='https://login.microsoftonline.com'
 $Script:DefaultTokenApiVersion="2.1"
 $Script:WSFedUserRealmApiVersion="1.0"
 #Fungible resource id for ASM and ARM
-$Script:DefaultAzureManagementUri='https://management.core.windows.net'
+$Script:DefaultAzureManagementUri='https://management.core.windows.net/'
+$Script:DefaultAzurePortalUri='https://portal.azure.com'
+$Script:DefaultAzureVaultUri='https://vault.azure.net'
 #Native client id for ASM,ARM,graph
 $Script:DefaultAzureManagementClientId='1950a258-227b-4e31-a9cf-717495945fc2'
 #Native client id for Portal
@@ -33,13 +35,13 @@ $Script:JwtBearerTokenType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 #endregion
 
 $Global:Azure_ActiveDirectory_WellKnownResourceIds=@{
-    ARM='https://management.core.windows.net'
-    Portal='https://portal.azure.com'
-    Vault='https://vault.windows.net'
+    ARM=$Script:DefaultAzureManagementUri
+    Portal=$Script:DefaultAzurePortalUri
+    Vault=$Script:DefaultAzureVaultUri
 }
 $Global:Azure_ActiveDirectory_WellKnownClientIds=@{
-    ARM="1950a258-227b-4e31-a9cf-717495945fc2";
-    Portal='c44b4083-3bb0-49c1-b47d-974e53cbdf3c';
+    ARM=$Script:DefaultAzureManagementClientId;
+    Portal=$Script:DefaultAzurePortalClientId;
 }
 $Global:Azure_ActiveDirectory_WellKnownConnections=@{
     ARM=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['ARM'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
@@ -759,7 +761,7 @@ Function GetWSTrustAssertionToken
     $RequestBody=[ordered]@{
         'grant_type'=$AssertionType;
         'client_id'=$ClientId;
-        'resource'=$Resource;
+        'resource'=$Resource.OriginalString;
         'scope'='openid';
         'assertion'=$EncodedAssertion;
     }
@@ -818,7 +820,7 @@ Function GetAzureADUserToken
     Write-Verbose "[GetAzureADUserToken] Requesting User Token for User $UserName from $($UriBuilder.Uri.AbsoluteUri)"
     $Request=[ordered]@{
         'grant_type'='password';
-        'resource'=$Resource;
+        'resource'=$Resource.OriginalString;
         'client_id'=$ClientId;
         'username'=$UserName;
         'password'=$Password;
@@ -1359,7 +1361,8 @@ Function Get-AzureADAuthorizationCode
 
     $TokenUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
     $TokenUriBuilder.Path="$TenantId/$AuthEndpoint"
-    $TokenQuery="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))&resource=$([Uri]::EscapeDataString($Resource.AbsoluteUri))"
+    #We will assume they got the Uri correct on entry
+    $TokenQuery="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))&resource=$([Uri]::EscapeDataString($Resource.OriginalString))"
     $TokenQuery+="&api-version=$TokenApiVersion&client_id=$($ClientId)&response_type=code"
     if($Consent.IsPresent)
     {
@@ -1455,8 +1458,9 @@ Function Approve-AzureADApplication
     if ($RedirectUri -ne $null) {
         $QueryStr+="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))"
     }
+    #We will assume they got the Uri correct on entry
     if ($Resource -ne $null) {
-        $QueryStr+="&resource=$([Uri]::EscapeDataString($Resource.AbsoluteUri))"
+        $QueryStr+="&resource=$([Uri]::EscapeDataString($Resource.OriginalString))"
     }
     $QueryStr+="&response_type=code&prompt=$ConsentType"
     $ConsentUriBuilder.Query=$QueryStr
@@ -1518,7 +1522,7 @@ Function Get-AzureADAccessTokenFromCode
     $Request=[ordered]@{
         'grant_type'='authorization_code';
         'client_id'=$ClientId;
-        'resource'=$Resource;
+        'resource'=$Resource.OriginalString;
         'scope'='openid';
         'code'=$AuthorizationCode;
         'redirect_uri'=$RedirectUri.AbsoluteUri;
@@ -1578,7 +1582,7 @@ Function Get-AzureADClientToken
         'grant_type'='client_credentials';
         'client_id'=$ClientId;
         'client_secret'=$ClientSecret;
-        'resource'=$Resource
+        'resource'=$Resource.OriginalString
     }
     $Response=Invoke-RestMethod -Method Post -Uri $UriBuilder.Uri -Body $Request -ErrorAction Stop
     Write-Verbose "[Get-AzureADClientToken] Success!"
@@ -1758,33 +1762,16 @@ Function Get-AzureADRefreshToken
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [System.String]$TokenApiVersion=$Script:DefaultTokenApiVersion
     )
-
-    if($PSCmdlet.ParameterSetName -eq 'object') {
-        if([String]::IsNullOrEmpty($ConnectionDetails.ClientId) -eq $false){
-            $ClientId=$ConnectionDetails.ClientId
-        }
-        if([String]::IsNullOrEmpty($ConnectionDetails.Resource)){
-            throw "A Resource value was not present"
-        }
-        else {
-            $Resource=$ConnectionDetails.Resource
-        }
-        if([String]::IsNullOrEmpty($ConnectionDetails.TenantId)) {
-            $TenantId='common'
-        }
-        else {
-            $TenantId=$ConnectionDetails.TenantId
-        }
-    }
     Write-Verbose "[Get-AzureADRefreshToken] Retrieving OAuth Refresh Token for ClientId:$ClientId Resource:$Resource Tenant:$TenantId"
 
     $UriBuilder=New-Object System.UriBuilder($AuthorizationUri)
     $UriBuilder.Path="$TenantId/$TokenEndpoint"
     $UriBuilder.Query="api-version=$TokenApiVersion"
+
     Write-Verbose "[GetAzureADUserToken] Requesting User Token for User $UserName from $($UriBuilder.Uri.AbsoluteUri)"
     $Request=[ordered]@{
         'grant_type'='refresh_token';
-        'resource'=$Resource;
+        'resource'=$Resource.OriginalString;
         'client_id'=$ClientId;
         'refresh_token'=$RefreshToken
     }
@@ -1846,7 +1833,7 @@ Function Get-AzureADImplicitFlowToken
 
     $TokenUriBuilder=New-Object System.UriBuilder($AuthorizationUri)
     $TokenUriBuilder.Path="$TenantId/$AuthEndpoint"
-    $TokenQuery="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))&resource=$([Uri]::EscapeDataString($Resource.AbsoluteUri))"
+    $TokenQuery="&redirect_uri=$([Uri]::EscapeDataString($RedirectUri.AbsoluteUri))&resource=$([Uri]::EscapeDataString($Resource.OriginalString))"
     $TokenQuery+="&api-version=$TokenApiVersion&client_id=$($ClientId)&response_type=token"
     if($Consent.IsPresent)
     {
@@ -1940,7 +1927,7 @@ Function Get-AzureADClientAssertionToken
         $RequestBody=[ordered]@{
             'grant_type'='client_credentials';
             'client_id'=$ClientId;
-            'resource'=$Resource;
+            'resource'=$Resource.OriginalString;
             'client_assertion'=$EncodedAssertion;
             'client_assertion_type'=$AssertionType;
         }
