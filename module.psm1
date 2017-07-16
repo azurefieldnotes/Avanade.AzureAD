@@ -26,9 +26,11 @@ $Script:DefaultAzureVaultUri='https://vault.azure.net'
 $Script:DefaultAzureADGraphUri='https://graph.windows.net/'
 $Script:DefaultMicrosoftGraphUri='https://graph.microsoft.com/'
 #Native client id for ASM,ARM,graph
-$Script:DefaultAzureManagementClientId='1950a258-227b-4e31-a9cf-717495945fc2'
-#Native client id for Portal
+$Script:DefaultPowershellClientId='1950a258-227b-4e31-a9cf-717495945fc2'
 $Script:DefaultAzurePortalClientId='c44b4083-3bb0-49c1-b47d-974e53cbdf3c'
+$Script:DefaultAzureActiveDirectoryClientId="00000002-0000-0000-c000-000000000000"
+$Script:DefaultVisualStudioClientId="872cd9fa-d31f-45e0-9eab-6e460a02d1f1"
+$Script:DefaultAzureCLIClientId="04b07795-8ddb-461a-bbee-02f9e1bf7b46"
 
 $Global:Azure_ActiveDirectory_WellKnownResourceIds=@{
     ARM=$Script:DefaultARMUri;
@@ -39,14 +41,14 @@ $Global:Azure_ActiveDirectory_WellKnownResourceIds=@{
     MicrosoftGraph=$Script:DefaultMicrosoftGraphUri;
 }
 $Global:Azure_ActiveDirectory_WellKnownClientIds=@{
-    ARM=$Script:DefaultAzureManagementClientId;
+    PowershellARM=$Script:DefaultPowershellClientId;
     Portal=$Script:DefaultAzurePortalClientId;
 }
 $Global:Azure_ActiveDirectory_WellKnownConnections=New-Object psobject -Property @{
-    ARM=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['ASM'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
+    ARM=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['ASM'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['PowershellARM']}
     Portal=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Portal'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['Portal']}
-    Vault=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Vault'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
-    Graph=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Graph'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['ARM']}
+    Vault=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Vault'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['PowershellARM']}
+    Graph=@{Resource=$Global:Azure_ActiveDirectory_WellKnownResourceIds['Graph'];ClientId=$Global:Azure_ActiveDirectory_WellKnownClientIds['PowershellARM']}
 }
 
 $Global:Azure_ActiveDirectory_Defaults=New-Object psobject -Property @{
@@ -1641,7 +1643,7 @@ Function Get-AzureADUserToken
         [System.Uri]$Resource=$Script:DefaultAzureManagementUri,
         [Parameter(Mandatory=$false,ParameterSetName='usemsa',ValueFromPipelineByPropertyName=$true)]
         [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
-        [System.String]$ClientId=$Script:DefaultAzureManagementClientId,
+        [System.String]$ClientId=$Script:DefaultPowershellClientId,
         [Parameter(Mandatory=$true,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
         [pscredential]$Credential,
         [Parameter(Mandatory=$false,ParameterSetName='explicit',ValueFromPipelineByPropertyName=$true)]
@@ -1767,7 +1769,7 @@ Function Get-AzureADRefreshToken
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
         [string]$RefreshToken,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
-        [string]$ClientId=$Script:DefaultAzureManagementUri,
+        [string]$ClientId=$Script:DefaultPowershellClientId,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
         [System.String]$TenantId="common",
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)]
